@@ -9,25 +9,10 @@ is_connected = False
 
 
 ### Socket-IO Callbacks ###
-@sio.event
-def connect():
-    print("I'm connected!")
-
-
-@sio.event
-def disconnect():
-    global is_connected
-    try:
-        sio.disconnect()
-        print("Disconnected!")
-        is_connected = False
-        exit(0)
-    except Exception as e:
-        print(e)
-
 
 @sio.on('login')
 def login_callback(data):
+    global is_connected
     cmd, msg = chatlib.parse_message(data)
     print(msg)  # TODO: delete
     print(cmd)  # TODO: delete
@@ -39,11 +24,22 @@ def login_callback(data):
             exit(0)
         elif next_operation == 'l':
             login_handler()
-    elif cmd == 'LOGIN_OK':
+    else:
+        is_connected = True
         player_game_menu(cmd)
 
 
 ### Socket-IO Handlers ###
+
+def disconnect():
+    global is_connected
+    try:
+        sio.disconnect()
+        print("Disconnected!")
+        is_connected = False
+        exit()
+    except Exception as e:
+        print(e)
 
 
 def login_handler():
@@ -66,8 +62,11 @@ def logout_handler():
 
 
 def error_and_exit(error_msg):
-    # TODO: implement
-    pass
+    print(error_msg)
+    try:
+        disconnect()
+    finally:
+        exit()
 
 
 def play_question_handler():

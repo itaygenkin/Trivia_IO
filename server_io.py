@@ -14,7 +14,8 @@ questions_bank = pd.DataFrame({'question': ['Which Basketball team has completed
 players = pd.DataFrame({'username': ['itay', 'oscar', 'test'],
                         'password': ['a123', 'oscar', 'test'],
                         'points': [0, 10, 0],
-                        'is_creator': [False, True, False]})
+                        'is_creator': [False, True, False],
+                        'id': [0, 1, 2]})
 logged_players = {}  # dict of pairs : {sid: (username, is_creator)}
 host = '127.0.0.1'
 port = 8080
@@ -94,7 +95,7 @@ def client_msg_handler(sid, data):
     pass
 
 
-def send_ack_and_msg(sid, ack, msg=''):
+def send_ack_and_msg(sid, callback, ack, msg=''):
     """
     sending an acknowledgement to client with a message
     :param sid: the session id of the client
@@ -102,7 +103,7 @@ def send_ack_and_msg(sid, ack, msg=''):
     :param msg: the message that the client might see
     """
     data = chatlib.build_message(ack, msg)
-    sio.emit(event='event', data=data, to=sid)
+    sio.emit(event=callback, data=data, to=sid)
 
 
 ### Handlers ###
@@ -122,7 +123,7 @@ def login_handler(sid, data):
             send_error(sid, full_error_msg)
 
         # check if user has already logged in
-        elif user in map(lambda x: x[0], logged_players):
+        elif user in players.iloc[list(logged_players.values())]['username'].values:
             err_msg = f'{user} has already logged in'
             full_error_msg = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
             send_error(sid, full_error_msg)
@@ -136,9 +137,11 @@ def login_handler(sid, data):
 
         # the user has successfully logged in
         else:
-            logged_players[sid] = (user, user_mode)
+            logged_players[sid] = players.loc[(players['username'] == user)
+                                              & (players['password'] == password)].index[0]
             print(f'User \'{user}\' successfully logged in')
-            send_ack_and_msg(sid, chatlib.PROTOCOL_SERVER['login_ok_msg'], 'Successfully logged in')
+            sio.emit(event='login', to=sid,
+                     data=chatlib.build_message(chatlib.PROTOCOL_SERVER['login_ok_msg'], 'Successfully logged in'))
 
     except AttributeError as e:
         send_error(sid, "Incorrect username or password")
@@ -164,9 +167,11 @@ def answer_handler(sid, user, data):
     pass
 
 
-def get_score_handler(sid, user):
-    # TODO: implement
-    pass
+@sio.on('get_score')
+def get_score_handler(sid):
+    global logged_players
+    score = players.iloc[logged_players[sid]]['score'].values[0]
+    sio.emit(event='get_score', data=str(score), to=sid)
 
 
 def get_highscore_handler(sid):
