@@ -1,3 +1,5 @@
+import time
+
 import socketio
 import eventlet
 import requests
@@ -13,7 +15,7 @@ questions_bank = pd.DataFrame({'question': ['Which Basketball team has completed
                                'id': 1})
 players = pd.DataFrame({'username': ['itay', 'oscar', 'test'],
                         'password': ['a123', 'oscar', 'test'],
-                        'points': [0, 10, 0],
+                        'score': [0, 10, 0],
                         'is_creator': [False, True, False],
                         'id': [0, 1, 2]})
 logged_players = {}  # dict of pairs : {sid: (username, is_creator)}
@@ -86,7 +88,7 @@ def send_error(sid, error_msg):
     :type error_msg: str
     """
     print('error:', error_msg)
-    sio.emit(event='event', data=error_msg, to=sid)
+    sio.emit(event='error', data=error_msg, to=sid)
 
 
 @sio.event
@@ -95,22 +97,12 @@ def client_msg_handler(sid, data):
     pass
 
 
-def send_ack_and_msg(sid, callback, ack, msg=''):
-    """
-    sending an acknowledgement to client with a message
-    :param sid: the session id of the client
-    :param ack: the acknowledgement
-    :param msg: the message that the client might see
-    """
-    data = chatlib.build_message(ack, msg)
-    sio.emit(event=callback, data=data, to=sid)
-
-
 ### Handlers ###
 
 @sio.on('login')
 def login_handler(sid, data):
     global players, logged_players
+    msg_back = ""
     try:
         [user, password, mode] = chatlib.split_data(data, 2)
         user_mode = chatlib.convert_user_mode(mode)
@@ -119,40 +111,39 @@ def login_handler(sid, data):
         if user not in players['username'].values or \
                 players.loc[players['username'] == user]['password'].values[0] != password:
             err_msg = "Incorrect username or password"
-            full_error_msg = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
-            send_error(sid, full_error_msg)
+            msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
 
         # check if user has already logged in
         elif user in players.iloc[list(logged_players.values())]['username'].values:
             err_msg = f'{user} has already logged in'
-            full_error_msg = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
-            send_error(sid, full_error_msg)
+            msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
 
         # check if user tried to log in without the right permission
         elif user_mode and not players.loc[(players['username'] == user) &
                                            (players['password'] == password)]['is_creator'].values[0]:
             err_msg = f"{user} is not permitted to log in as a creator"
-            full_error_msg = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
-            send_error(sid, full_error_msg)
+            msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
 
         # the user has successfully logged in
         else:
             logged_players[sid] = players.loc[(players['username'] == user)
                                               & (players['password'] == password)].index[0]
             print(f'User \'{user}\' successfully logged in')
-            sio.emit(event='login', to=sid,
-                     data=chatlib.build_message(chatlib.PROTOCOL_SERVER['login_ok_msg'], 'Successfully logged in'))
+            msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_ok_msg'], 'Successfully logged in')
 
     except AttributeError as e:
+        msg_back = 'Failed to log in. Try again.'
         send_error(sid, "Incorrect username or password")
     except Exception as e:
+        msg_back = 'Failed to log in. Try again.'
         print(f'Something wrong happened when a user tried to log in.\nsid: {sid}')
         print(e)
+    finally:
+        sio.emit(event='login_callback', to=sid, data=msg_back)
 
 
 @sio.on('logout')
 def logout_handler(sid):
-    # TODO: check after implementation in client side
     global logged_players
     sio.disconnect(sid)
 
@@ -167,11 +158,12 @@ def answer_handler(sid, user, data):
     pass
 
 
-@sio.on('get_score')
+@sio.on('server_score')
 def get_score_handler(sid):
     global logged_players
-    score = players.iloc[logged_players[sid]]['score'].values[0]
-    sio.emit(event='get_score', data=str(score), to=sid)
+    score = players.iloc[int(logged_players[sid])]['score']
+    data = chatlib.build_message(chatlib.PROTOCOL_SERVER['score'], str(score))
+    sio.emit(event='score_callback', data=data, to=sid)
 
 
 def get_highscore_handler(sid):
@@ -191,8 +183,8 @@ def update_question_bank(sid):
 
 ### APP PROCESS ###
 def main():
-    sio.on(event='event', handler=login_handler)
-    eventlet.wsgi.server(eventlet.listen((host, port)), app)
+    # sio.on(event='event', handler=login_handler)
+     eventlet.wsgi.server(eventlet.listen((host, port)), app)
     # TODO: complete main()
 
 
