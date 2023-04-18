@@ -1,5 +1,4 @@
 import string
-import random
 
 # Protocol Constants
 
@@ -7,9 +6,6 @@ CMD_FIELD_LENGTH = 16  # Exact length of cmd field (in bytes)
 LENGTH_FIELD_LENGTH = 4   # Exact length of length field (in bytes)
 MAX_DATA_LENGTH = 10 ** LENGTH_FIELD_LENGTH - 1  # Max size of data field according to protocol
 MSG_HEADER_LENGTH = CMD_FIELD_LENGTH + 1 + LENGTH_FIELD_LENGTH + 1  # Exact size of header (CMD+LENGTH fields)
-# MAX_MSG_LENGTH = MSG_HEADER_LENGTH + MAX_DATA_LENGTH  # Max size of total message
-# DELIMITER = "|"  # Delimiter character in protocol
-# DATA_DELIMITER = "#"  # Delimiter in the data part of the message
 
 # Protocol Messages 
 # In this dictionary we will have all the client and server command names
@@ -46,15 +42,6 @@ PROTOCOL_SERVER = {
 	"no_ques": "NO_QUESTION",
 	"add_succ": "ADD_QUESTION_SUCCESSFULLY"
 }
-
-SERVER_PROTOCOL = {
-	1: 'LOGIN_OK'
-}
-
-
-# Other constants
-
-ERROR_RETURN = None  # What is returned in case of an error
 
 
 def build_message(cmd, data):
@@ -135,14 +122,6 @@ def join_data(msg_fields):
 	return msg[:-1]
 
 
-def generate_question_number():
-	numbers = list(range(1, 10000))
-	while True:
-		next = random.choice(numbers)
-		yield next
-		numbers.remove(next)
-
-
 def parse_notation(sentence):
 	sentence = sentence.replace('&#039;', "\'")
 	sentence = sentence.replace('&#034;', '\"')
@@ -157,12 +136,3 @@ def convert_user_mode(mode):
 		return False
 	return None
 
-
-def get_input_and_validate(input_choices, menu):
-	user_input = input(menu)
-	while user_input not in input_choices:
-		print("Invalid choice")
-		user_input = input(menu)
-	return user_input
-
-	

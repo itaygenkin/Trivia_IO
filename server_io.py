@@ -65,12 +65,6 @@ def update_questions_bank_from_web():
     questions_bank = questions_bank._append(questions_to_add, ignore_index=True)
 
 
-def update_questions_bank_from_json():
-    global questions_bank
-    # TODO: implement
-    pass
-
-
 ### SOCKET METHODS ###
 
 sio = socketio.Server()
@@ -185,7 +179,6 @@ def answer_handler(sid, data):
     sio.emit(event='answer_callback', data=data_to_send, to=sid)
 
 
-
 @sio.on('server_score')
 def get_score_handler(sid):
     score = players.loc[players['sid'] == sid]['score'].values[0]
@@ -202,14 +195,20 @@ def get_highscore_handler(sid):
     print('[SERVER] ', data_to_send)
 
 
+@sio.on('server_add_question')
 def add_question_handler(sid, data):
-    # TODO: implement
-    pass
-
-
-def update_question_bank(sid):
-    # TODO: implement
-    pass
+    data_to_send = ''
+    try:
+        q_data = chatlib.parse_message(data)
+        max_id = questions_bank['id'].max()
+        question_to_add = pd.DataFrame({'question': q_data[0], 'answers': [q_data[1], q_data[2], q_data[3], q_data[4]],
+                                        'correct_answer': q_data[5], 'id': max_id})
+        questions_bank._append(question_to_add)
+        data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['add_succ'], "")
+    except Exception:
+        data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['error'], 'Failed to add the question.')
+    finally:
+        sio.emit(event='add_question_callback', data=data_to_send, to=sid)
 
 
 ### APP PROCESS ###
