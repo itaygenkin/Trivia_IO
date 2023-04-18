@@ -7,6 +7,7 @@ import chatlib
 sio = socketio.Client()
 sio.connect('http://127.0.0.1:8080')
 is_connected = False
+TIMEOUT = 6
 
 
 ### Socket-IO Callbacks ###
@@ -15,8 +16,6 @@ is_connected = False
 def login_callback(data):
     global is_connected
     cmd, msg = chatlib.parse_message(data)
-    print(msg)  # TODO: delete
-    print(cmd)  # TODO: delete
     if cmd == 'ERROR':
         print('Login failed: ', msg)
         next_operation = chatlib.get_input_and_validate(['e', 'l'], 'e - exit\nl - log in\n')
@@ -33,6 +32,14 @@ def login_callback(data):
 def get_score_callback(data):
     cmd, score = chatlib.parse_message(data)
     print('Your score:', score)
+    time.sleep(3)
+    player_game_menu(cmd)
+
+
+@sio.on('highscore_callback')
+def get_highscore_callback(data):
+    cmd, highscore = chatlib.parse_message(data)
+    print(highscore)
     time.sleep(3)
     player_game_menu(cmd)
 
@@ -96,8 +103,7 @@ def get_score_handler():
 
 
 def get_highscore_handler():
-    # TODO: implement
-    pass
+    sio.emit(event='server_highscore')
 
 
 def add_question_handler():
@@ -142,5 +148,7 @@ def creator_menu():
 
 if __name__ == '__main__':
     login_handler()
+    time.sleep(TIMEOUT)
     if not is_connected:
+        print('Shut down')
         exit()

@@ -1,5 +1,3 @@
-import time
-
 import socketio
 import eventlet
 import requests
@@ -17,7 +15,8 @@ players = pd.DataFrame({'username': ['itay', 'oscar', 'test'],
                         'password': ['a123', 'oscar', 'test'],
                         'score': [0, 10, 0],
                         'is_creator': [False, True, False],
-                        'id': [0, 1, 2]})
+                        'id': [0, 1, 2],
+                        'questions_asked': [[], [], []]})
 logged_players = {}  # dict of pairs : {sid: (username, is_creator)}
 host = '127.0.0.1'
 port = 8080
@@ -40,17 +39,29 @@ def update_questions_bank_from_web():
     global questions_bank
     response = requests.get(url="https://opentdb.com/api.php?amount=50&type=multiple")
     payload = response.json()['results']
+
+    questions = []
+    answers = []
+    correct_answers = []
+
     for q in payload:
         question = chatlib.parse_notation(q['question'])
         if question in questions_bank['question'].values:
             continue
+        questions.append(question)
+
         correct_answer = q['correct_answer']
         incorrect_answers = q['incorrect_answers']
-        # create a list of all answers
-        answers = gather_answers(correct_answer, incorrect_answers)
-        question_to_add = pd.DataFrame({'question': question, 'answers': [answers], 'correct_answer': correct_answer})
-        # add the question to the questions bank
-        questions_bank = questions_bank._append(question_to_add, ignore_index=True)
+
+        # create a list of all answers and add the list to {answers} list
+        answers.append(gather_answers(correct_answer, incorrect_answers))
+        correct_answers.append(correct_answer)
+
+    max_id = questions_bank['id'].max()
+    # add the questions to the questions bank
+    questions_to_add = pd.DataFrame({'question': questions, 'answers': answers, 'correct_answer': correct_answers,
+                                     'id': range(max_id + 1, len(questions) + max_id + 1)})
+    questions_bank = questions_bank._append(questions_to_add, ignore_index=True)
 
 
 def update_questions_bank_from_json():
@@ -166,9 +177,12 @@ def get_score_handler(sid):
     sio.emit(event='score_callback', data=data, to=sid)
 
 
+@sio.on('server_highscore')
 def get_highscore_handler(sid):
-    # TODO: implement
-    pass
+    highscore = players.sort_values(by=['score'], ascending=False)[['username', 'score']].head(10)
+    highscore_data = chatlib.build_message(chatlib.PROTOCOL_CLIENT['high'], highscore.to_string(index=False))
+    sio.emit(event='highscore_callback', data=highscore_data, to=sid)
+
 
 
 def add_question_handler(sid, data):
@@ -182,13 +196,8 @@ def update_question_bank(sid):
 
 
 ### APP PROCESS ###
-def main():
-    # sio.on(event='event', handler=login_handler)
-     eventlet.wsgi.server(eventlet.listen((host, port)), app)
-    # TODO: complete main()
-
 
 if __name__ == '__main__':
-    main()
-
+    update_questions_bank_from_web()
+    eventlet.wsgi.server(eventlet.listen((host, port)), app)
 
