@@ -7,7 +7,10 @@ import pandas as pd
 
 # TODO: add a logger
 
+###############
 ### GLOBALS ###
+###############
+
 questions_bank = pd.DataFrame({'question': ['Which Basketball team has completed two threepeats?'],
                                'answers': [['Chicago Bulls', 'LA Lakers', 'Golden state Warriors', 'Boston Celtics']],
                                'correct_answer': ['Chicago Bulls'],
@@ -22,7 +25,9 @@ players = pd.DataFrame({'username': ['itay', 'oscar', 'test'],
 host = '127.0.0.1'
 port = 8080
 
+####################
 ### DATA LOADERS ###
+####################
 
 
 def gather_answers(correct_answer, incorrect_answers):
@@ -65,7 +70,9 @@ def update_questions_bank_from_web():
     questions_bank = questions_bank._append(questions_to_add, ignore_index=True)
 
 
+######################
 ### SOCKET METHODS ###
+######################
 
 sio = socketio.Server()
 app = socketio.WSGIApp(sio, static_files={'/': './content/'})
@@ -96,7 +103,9 @@ def send_error(sid, error_msg):
     print('[SERVER]: ', error_msg)
 
 
+################
 ### Handlers ###
+################
 
 @sio.on('login')
 def login_handler(sid, data):
@@ -124,8 +133,6 @@ def login_handler(sid, data):
 
         # the user has successfully logged in
         else:
-            # logged_players[sid] = players.loc[(players['username'] == user)
-            #                                   & (players['password'] == password)].index[0]
             index = players.loc[(players['username'] == user) & (players['password'] == password)].index[0]
             players.at[index, 'sid'] = sid
             msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_ok_msg'], 'Successfully logged in')
@@ -211,7 +218,9 @@ def add_question_handler(sid, data):
         sio.emit(event='add_question_callback', data=data_to_send, to=sid)
 
 
+###################
 ### APP PROCESS ###
+###################
 
 if __name__ == '__main__':
     update_questions_bank_from_web()

@@ -39,8 +39,10 @@ def get_input_and_validate(input_choices, menu):
         print(e)
         disconnect()
 
-### Socket-IO Callbacks ###
 
+###########################
+### Socket-IO Callbacks ###
+###########################
 
 @sio.on('login_callback')
 def login_callback(data):
@@ -110,7 +112,9 @@ def error_callback(data):
     pass
 
 
+##########################
 ### Socket-IO Handlers ###
+##########################
 
 def disconnect():
     global is_connected
@@ -184,7 +188,9 @@ def add_question_handler():
     sio.emit(event='server_add_question', data=data_to_send)
 
 
+######################
 ### Client Process ###
+######################
 
 def menu(cmd=None):
     if user_mode == '1':
