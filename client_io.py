@@ -28,6 +28,26 @@ def login_callback(data):
         player_game_menu(cmd)
 
 
+@sio.on('play_question_callback')
+def play_question_callback(data):
+    cmd, question_data = chatlib.parse_message(data)
+    q_data = chatlib.split_data(question_data, 5)
+
+    question_pretty_print = [f'\n{x-1} - {q_data[x]}' for x in range(1, len(q_data))]
+    print(''.join(question_pretty_print)[5:])
+    user_ans = int(chatlib.get_input_and_validate(['1', '2', '3', '4'], 'Your answer: '))
+
+    send_answer_handler(q_data[0], q_data[user_ans+1])
+
+
+@sio.on('answer_callback')
+def get_answer_callback(data):
+    cmd, data = chatlib.parse_message(data)
+    print(cmd, data)
+    time.sleep(2)
+    player_game_menu(cmd)
+
+
 @sio.on('score_callback')
 def get_score_callback(data):
     cmd, score = chatlib.parse_message(data)
@@ -94,8 +114,12 @@ def error_and_exit(error_msg):
 
 
 def play_question_handler():
-    # TODO: implement
-    pass
+    sio.emit(event='play_question')
+
+
+def send_answer_handler(qid, ans):
+    data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['send_ans'], qid + '#' + ans)
+    sio.emit(event='answer', data=data_to_send)
 
 
 def get_score_handler():
@@ -141,7 +165,7 @@ def player_game_menu(cmd=None):
 
 def creator_menu():
     # TODO: implement
-    print('function not implemented yet')
+    print('function hasn\'t implemented yet')
     disconnect()
     exit()
 

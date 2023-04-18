@@ -5,6 +5,7 @@ import chatlib
 import random
 import pandas as pd
 
+# TODO: add a logger
 
 ### GLOBALS ###
 questions_bank = pd.DataFrame({'question': ['Which Basketball team has completed two threepeats?'],
@@ -16,8 +17,8 @@ players = pd.DataFrame({'username': ['itay', 'oscar', 'test'],
                         'score': [0, 10, 0],
                         'is_creator': [False, True, False],
                         'id': [0, 1, 2],
-                        'questions_asked': [[], [], []]})
-logged_players = {}  # dict of pairs : {sid: (username, is_creator)}
+                        'questions_asked': [[], [], []],
+                        'sid': [None, None, None]})
 host = '127.0.0.1'
 port = 8080
 
@@ -83,14 +84,13 @@ def connect(sid, environ):
 
 @sio.event
 def disconnect(sid):
-    global logged_players
     sio.disconnect(sid=sid)
-    if sid in logged_players.keys():
-        logged_players.pop(sid)
+    sid_index = players.loc[players['sid'] == sid]['sid'].index
+    if len(sid_index) > 0 and sid in players.iloc[sid_index[0]].values:
+        players.at[sid_index[0], 'sid'] = None
     print(sid, 'disconnected...')
 
 
-# TODO: implement
 def send_error(sid, error_msg):
     """
     sends an error with a message
@@ -98,21 +98,14 @@ def send_error(sid, error_msg):
     :param error_msg: an error message to be sent
     :type error_msg: str
     """
-    print('error:', error_msg)
     sio.emit(event='error', data=error_msg, to=sid)
-
-
-@sio.event
-def client_msg_handler(sid, data):
-    # TODO: complete
-    pass
+    print('[SERVER]: ', error_msg)
 
 
 ### Handlers ###
 
 @sio.on('login')
 def login_handler(sid, data):
-    global players, logged_players
     msg_back = ""
     try:
         [user, password, mode] = chatlib.split_data(data, 2)
@@ -125,7 +118,7 @@ def login_handler(sid, data):
             msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
 
         # check if user has already logged in
-        elif user in players.iloc[list(logged_players.values())]['username'].values:
+        elif players.loc[(players['username'] == user) & (players['password'] == password)]['sid'].values[0]:
             err_msg = f'{user} has already logged in'
             msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
 
@@ -137,9 +130,10 @@ def login_handler(sid, data):
 
         # the user has successfully logged in
         else:
-            logged_players[sid] = players.loc[(players['username'] == user)
-                                              & (players['password'] == password)].index[0]
-            print(f'User \'{user}\' successfully logged in')
+            # logged_players[sid] = players.loc[(players['username'] == user)
+            #                                   & (players['password'] == password)].index[0]
+            index = players.loc[(players['username'] == user) & (players['password'] == password)].index[0]
+            players.at[index, 'sid'] = sid
             msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_ok_msg'], 'Successfully logged in')
 
     except AttributeError as e:
@@ -151,38 +145,61 @@ def login_handler(sid, data):
         print(e)
     finally:
         sio.emit(event='login_callback', to=sid, data=msg_back)
+        print('[SERVER] ', msg_back)
 
 
 @sio.on('logout')
 def logout_handler(sid):
-    global logged_players
     sio.disconnect(sid)
 
 
+def create_random_question(sid):
+    q_asked = players.loc[players['sid'] == sid]['questions_asked'].values
+    qid = random.choice([x for x in range(1, questions_bank['id'].max()) if x not in q_asked])
+    question = questions_bank.iloc[qid]
+    return str(qid) + '#' + question['question'] + '#' + '#'.join(question['answers'])
+
+
+@sio.on('play_question')
 def play_question_handler(sid):
-    # TODO: implement
-    pass
+    question_data = create_random_question(sid)
+    data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['question'], question_data)
+    sio.emit(event='play_question_callback', data=data_to_send)
+    print('[SERVER] ', data_to_send)
 
 
-def answer_handler(sid, user, data):
-    # TODO: implement
-    pass
+@sio.on('answer')
+def answer_handler(sid, data):
+    print(data)
+    cmd, msg = chatlib.parse_message(data)
+    qid, ans = chatlib.split_data(msg, 1)
+
+    # check if the user is correct
+    if questions_bank.iloc[int(qid)]['correct_answer'] == ans:
+        data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['correct'], 'YOU GOT 5 POINTS.')
+        user_index = players.loc[players['sid'] == sid].index[0]
+        players.at[user_index, 'questions_asked'].append(qid)
+        players.at[user_index, 'score'] += 5
+    else:
+        data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['wrong'], '')
+    sio.emit(event='answer_callback', data=data_to_send, to=sid)
+
 
 
 @sio.on('server_score')
 def get_score_handler(sid):
-    global logged_players
-    score = players.iloc[int(logged_players[sid])]['score']
-    data = chatlib.build_message(chatlib.PROTOCOL_SERVER['score'], str(score))
-    sio.emit(event='score_callback', data=data, to=sid)
+    score = players.loc[players['sid'] == sid]['score'].values[0]
+    data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['score'], str(score))
+    sio.emit(event='score_callback', data=data_to_send, to=sid)
+    print('[SERVER] ', data_to_send)
 
 
 @sio.on('server_highscore')
 def get_highscore_handler(sid):
     highscore = players.sort_values(by=['score'], ascending=False)[['username', 'score']].head(10)
-    highscore_data = chatlib.build_message(chatlib.PROTOCOL_CLIENT['high'], highscore.to_string(index=False))
-    sio.emit(event='highscore_callback', data=highscore_data, to=sid)
-
+    data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['high'], highscore.to_string(index=False))
+    sio.emit(event='highscore_callback', data=data_to_send, to=sid)
+    print('[SERVER] ', data_to_send)
 
 
 def add_question_handler(sid, data):
