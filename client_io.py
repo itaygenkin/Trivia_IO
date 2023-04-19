@@ -5,7 +5,10 @@ import socketio
 import chatlib
 
 
-### Globals ###
+###############
+### GLOBALS ###
+###############
+
 sio = socketio.Client()
 sio.connect('http://127.0.0.1:8080')
 is_connected = False
@@ -225,14 +228,17 @@ def player_game_menu(cmd=None):
 def creator_menu(cmd=None):
     creator_menu_msg = """
 1 - Add question
-2 - Get highscore\n"""
-    print('function hasn\'t implemented yet')
-    command = get_input_and_validate(['1', '2'], creator_menu_msg)
+2 - Get highscore
+3 - Log out\n"""
+    command = get_input_and_validate(['1', '2', '3'], creator_menu_msg)
     match command:
         case '1':
             add_question_handler()
         case '2':
             get_highscore_handler()
+        case '3':
+            logout_handler()
+            return
         case _:
             return
     return

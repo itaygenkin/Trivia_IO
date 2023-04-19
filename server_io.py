@@ -4,13 +4,16 @@ import requests
 import chatlib
 import random
 import pandas as pd
-
-# TODO: add a logger
+import logging
 
 ###############
 ### GLOBALS ###
 ###############
 
+logging.basicConfig(filename='trivia_logger.log', level=logging.DEBUG, filemode='w',
+                    format="%(asctime)s>>%(levelname)s>> %(msg)s;", datefmt='%d/%m/%y-%H:%M')
+host = '127.0.0.1'
+port = 8080
 questions_bank = pd.DataFrame({'question': ['Which Basketball team has completed two threepeats?'],
                                'answers': [['Chicago Bulls', 'LA Lakers', 'Golden state Warriors', 'Boston Celtics']],
                                'correct_answer': ['Chicago Bulls'],
@@ -22,8 +25,6 @@ players = pd.DataFrame({'username': ['itay', 'oscar', 'test'],
                         'id': [0, 1, 2],
                         'questions_asked': [[], [], []],
                         'sid': [None, None, None]})
-host = '127.0.0.1'
-port = 8080
 
 ####################
 ### DATA LOADERS ###
@@ -68,6 +69,7 @@ def update_questions_bank_from_web():
     questions_to_add = pd.DataFrame({'question': questions, 'answers': answers, 'correct_answer': correct_answers,
                                      'id': range(max_id + 1, len(questions) + max_id + 1)})
     questions_bank = questions_bank._append(questions_to_add, ignore_index=True)
+    logging.debug(msg='successfully updated questions from web')
 
 
 ######################
@@ -81,6 +83,7 @@ app = socketio.WSGIApp(sio, static_files={'/': './content/'})
 @sio.event
 def connect(sid, environ):
     print(sid, 'connected...')
+    logging.debug(msg=f'{sid} connected')
 
 
 @sio.event
@@ -90,6 +93,7 @@ def disconnect(sid):
     if len(sid_index) > 0 and sid in players.iloc[sid_index[0]].values:
         players.at[sid_index[0], 'sid'] = None
     print(sid, 'disconnected...')
+    logging.debug(msg=f'{sid} disconnected')
 
 
 def send_error(sid, error_msg):
@@ -136,14 +140,14 @@ def login_handler(sid, data):
             index = players.loc[(players['username'] == user) & (players['password'] == password)].index[0]
             players.at[index, 'sid'] = sid
             msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_ok_msg'], 'Successfully logged in')
+            logging.debug(msg=f'{user} successfully logged in')
 
     except AttributeError as e:
         msg_back = 'Failed to log in. Try again.'
         send_error(sid, "Incorrect username or password")
     except Exception as e:
         msg_back = 'Failed to log in. Try again.'
-        print(f'Something wrong happened when a user tried to log in.\nsid: {sid}')
-        print(e)
+        logging.debug(msg=f'Something wrong happened when a user tried to log in.\nsid: {sid}\nException: {e}')
     finally:
         sio.emit(event='login_callback', to=sid, data=msg_back)
         print('[SERVER] ', msg_back)
@@ -212,8 +216,10 @@ def add_question_handler(sid, data):
                                         'correct_answer': q_data[5], 'id': max_id})
         questions_bank._append(question_to_add)
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['add_succ'], "")
+        logging.debug(msg='successfully added question')
     except Exception:
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['error'], 'Failed to add the question.')
+        logging.debug(msg='Failed to add question')
     finally:
         sio.emit(event='add_question_callback', data=data_to_send, to=sid)
 
