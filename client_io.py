@@ -28,12 +28,12 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-def get_input_and_validate(input_choices, menu):
+def get_input_and_validate(input_choices, menu_msg):
     try:
-        user_input = input(menu)
+        user_input = input(menu_msg)
         while user_input not in input_choices:
             print("Invalid choice")
-            user_input = input(menu)
+            user_input = input(menu_msg)
         return user_input
     except EOFError or KeyboardInterrupt:
         pass
