@@ -17,6 +17,12 @@ user_mode = None
 
 
 def signal_handler(sig, frame):
+    """
+    a handler to signals (INT, TERM) caught from user,
+    disconnect from server, and do exit
+    :param sig: the signal caught from user
+    :param frame:
+    """
     print('-^--^-')
     try:
         disconnect()
@@ -29,6 +35,13 @@ signal.signal(signal.SIGTERM, signal_handler)
 
 
 def get_input_and_validate(input_choices, menu_msg):
+    """
+    getting an input from user and validate that it's
+    taken from {input_choices}.
+    :param input_choices: a list of options which the input should be taken from
+    :param menu_msg: a message to be shown for the user
+    :return: the user's input
+    """
     try:
         user_input = input(menu_msg)
         while user_input not in input_choices:
@@ -196,6 +209,10 @@ def add_question_handler():
 ######################
 
 def menu(cmd=None):
+    """
+    a small menu pipe to call the relevant menu
+    :param cmd: a command to be sent for the next menu
+    """
     if user_mode == '1':
         player_game_menu(cmd)
     elif user_mode == '2':
@@ -204,6 +221,10 @@ def menu(cmd=None):
 
 
 def player_game_menu(cmd=None):
+    """
+    a menu for regular player
+    :param cmd: for optional use case later (not used right now)
+    """
     player_menu_msg = """
 1 - Play a question
 2 - Get score
@@ -226,6 +247,10 @@ def player_game_menu(cmd=None):
 
 
 def creator_menu(cmd=None):
+    """
+    a menu for creator
+    :param cmd: for optional use case later (not used right now)
+    """
     creator_menu_msg = """
 1 - Add question
 2 - Get highscore
@@ -246,6 +271,7 @@ def creator_menu(cmd=None):
 
 if __name__ == '__main__':
     login_handler()
+    # after TIMEOUT is done and nothing happened, the program gracefully exit
     time.sleep(TIMEOUT)
     if not is_connected:
         print('Shut down')

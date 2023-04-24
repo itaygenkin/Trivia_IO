@@ -43,7 +43,7 @@ def cleanup():
     print('exiting...')
 
 
-logging.basicConfig(filename='trivia_logger.log', level=logging.INFO, filemode='w',
+logging.basicConfig(filename='trivia_logger.log', level=logging.INFO, filemode='a',
                     format="%(asctime)s>> %(levelname)s>> %(msg)s;", datefmt='%d/%m/%y-%H:%M')
 
 ####################
@@ -94,6 +94,14 @@ def update_questions_bank_from_web():
 
 def write_to_csv():
     players.to_csv('players.csv')
+
+
+def read_and_append_csv():
+    """
+    reading a csv file and append the data to players data frame
+    """
+    # TODO: implement
+    pass
 
 
 ######################
