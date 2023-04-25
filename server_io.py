@@ -6,6 +6,7 @@ import random
 import pandas as pd
 import logging
 import atexit
+import sys
 
 ###############
 ### GLOBALS ###
@@ -84,7 +85,7 @@ def update_questions_bank_from_web():
         answers.append(gather_answers(correct_answer, incorrect_answers))
         correct_answers.append(correct_answer)
 
-    max_id = questions_bank['id'].max()
+    max_id = questions_bank.id.max()
     # add the questions to the questions bank
     questions_to_add = pd.DataFrame({'question': questions, 'answers': answers, 'correct_answer': correct_answers,
                                      'id': range(max_id + 1, len(questions) + max_id + 1)})
@@ -100,8 +101,15 @@ def read_and_append_csv():
     """
     reading a csv file and append the data to players data frame
     """
-    # TODO: implement
-    pass
+    global players
+    temp_csv = pd.read_csv(sys.argv[1])
+    max_id = players.id.max()
+    for index, row in temp_csv.iterrows():
+        if row.id <= max_id:
+            continue
+        next_row = row
+        next_row['sid'] = None
+        players = players._append(row)
 
 
 ######################
@@ -242,7 +250,7 @@ def add_question_handler(sid, data):
     data_to_send = ''
     try:
         q_data = chatlib.parse_message(data)
-        max_id = questions_bank['id'].max()
+        max_id = questions_bank.id.max()
         question_to_add = pd.DataFrame({'question': q_data[0], 'answers': [q_data[1], q_data[2], q_data[3], q_data[4]],
                                         'correct_answer': q_data[5], 'id': max_id})
         questions_bank._append(question_to_add)
@@ -261,5 +269,8 @@ def add_question_handler(sid, data):
 
 if __name__ == '__main__':
     update_questions_bank_from_web()
+    read_and_append_csv()
+    print(players)
+    # 3,shuky,shuk,5,False,3,[],
+    # write_to_csv()
     eventlet.wsgi.server(eventlet.listen((host, port)), app)
-
