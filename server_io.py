@@ -38,8 +38,11 @@ def cleanup():
     for sid in players['sid'].values:
         if sid is None:
             continue
-        sio.disconnect(sid=sid)
-        logging.info(msg=f'{sid} disconnected')
+        try:
+            sio.disconnect(sid=sid)
+            logging.info(msg=f'{sid} disconnected')
+        except:
+            logging.info(msg=f'unable to disconnect {sid}')
     write_to_csv()
     print('exiting...')
 
@@ -52,7 +55,7 @@ logging.basicConfig(filename='trivia_logger.log', level=logging.INFO, filemode='
 ####################
 
 
-def gather_answers(correct_answer, incorrect_answers):
+def gather_answers(correct_answer: str, incorrect_answers: list[str]) -> list[str]:
     answers = []
     correct_question_index = random.randint(1, 4)
     for i in range(1, 5):
@@ -121,22 +124,26 @@ app = socketio.WSGIApp(sio, static_files={'/': './content/'})
 
 
 @sio.event
-def connect(sid, environ):
+def connect(sid: str, environ):
     print(sid, 'connected...')
     logging.info(msg=f'{sid} connected')
 
 
 @sio.event
-def disconnect(sid):
+def disconnect(sid: str) -> None:
+    """
+    disconnecting a client
+    :param sid: the session id of the client to be disconnected
+    """
     sio.disconnect(sid=sid)
-    sid_index = players.loc[players['sid'] == sid]['sid'].index
+    sid_index = players.loc[players['sid'] == sid]['sid'].index  # TODO:
     if len(sid_index) > 0 and sid in players.iloc[sid_index[0]].values:
         players.at[sid_index[0], 'sid'] = None
     print(sid, 'disconnected...')
     logging.info(msg=f'{sid} disconnected')
 
 
-def send_error(sid, error_msg):
+def send_error(sid: str, error_msg: str):
     """
     sends an error with a message
     :param sid: the session id of the client to be sent to
@@ -152,7 +159,7 @@ def send_error(sid, error_msg):
 ################
 
 @sio.on('login')
-def login_handler(sid, data):
+def login_handler(sid: str, data: str):
     msg_back = ""
     try:
         [user, password, mode] = chatlib.split_data(data, 2)
@@ -190,15 +197,16 @@ def login_handler(sid, data):
         logging.info(msg=f'Something wrong happened when a user tried to log in.\nsid: {sid}\nException: {e}')
     finally:
         sio.emit(event='login_callback', to=sid, data=msg_back)
+        # sio.emit(event=callback, to=sid, data=msg_back)
         print('[SERVER] ', msg_back)
 
 
 @sio.on('logout')
-def logout_handler(sid):
+def logout_handler(sid: str):
     sio.disconnect(sid)
 
 
-def create_random_question(sid):
+def create_random_question(sid: str):
     q_asked = players.loc[players['sid'] == sid]['questions_asked'].values
     qid = random.choice([x for x in range(1, questions_bank['id'].max()) if x not in q_asked])
     question = questions_bank.iloc[qid]
@@ -206,7 +214,7 @@ def create_random_question(sid):
 
 
 @sio.on('play_question')
-def play_question_handler(sid):
+def play_question_handler(sid: str):
     question_data = create_random_question(sid)
     data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['question'], question_data)
     sio.emit(event='play_question_callback', data=data_to_send, to=sid)
@@ -214,7 +222,7 @@ def play_question_handler(sid):
 
 
 @sio.on('answer')
-def answer_handler(sid, data):
+def answer_handler(sid: str, data: str):
     cmd, msg = chatlib.parse_message(data)
     qid, ans = chatlib.split_data(msg, 1)
 
@@ -222,15 +230,19 @@ def answer_handler(sid, data):
     if questions_bank.iloc[int(qid)]['correct_answer'] == ans:
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['correct'], 'YOU GOT 5 POINTS.')
         user_index = players.loc[players['sid'] == sid].index[0]
-        players.at[user_index, 'questions_asked'].append(qid)
-        players.at[user_index, 'score'] += 5
+        try:
+            players.at[user_index, 'questions_asked'].append(qid)
+            players.at[user_index, 'score'] += 5
+        except Exception as e:
+            print(players.at[user_index, 'questions_asked'])
+            print(e)
     else:
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['wrong'], '')
     sio.emit(event='answer_callback', data=data_to_send, to=sid)
 
 
 @sio.on('server_score')
-def get_score_handler(sid):
+def get_score_handler(sid: str):
     score = players.loc[players['sid'] == sid]['score'].values[0]
     data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['score'], str(score))
     sio.emit(event='score_callback', data=data_to_send, to=sid)
@@ -238,7 +250,7 @@ def get_score_handler(sid):
 
 
 @sio.on('server_highscore')
-def get_highscore_handler(sid):
+def get_highscore_handler(sid: str):
     highscore = players.sort_values(by=['score'], ascending=False)[['username', 'score']].head(10)
     data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['high'], highscore.to_string(index=False))
     sio.emit(event='highscore_callback', data=data_to_send, to=sid)
@@ -246,7 +258,7 @@ def get_highscore_handler(sid):
 
 
 @sio.on('server_add_question')
-def add_question_handler(sid, data):
+def add_question_handler(sid: str, data: str):
     data_to_send = ''
     try:
         q_data = chatlib.parse_message(data)
@@ -270,7 +282,7 @@ def add_question_handler(sid, data):
 if __name__ == '__main__':
     update_questions_bank_from_web()
     read_and_append_csv()
-    print(players)
+    # print(players)
     # 3,shuky,shuk,5,False,3,[],
     # write_to_csv()
     eventlet.wsgi.server(eventlet.listen((host, port)), app)
