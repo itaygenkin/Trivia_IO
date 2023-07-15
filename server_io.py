@@ -18,13 +18,13 @@ questions_bank = pd.DataFrame({'question': ['Which Basketball team has completed
                                'answers': [['Chicago Bulls', 'LA Lakers', 'Golden state Warriors', 'Boston Celtics']],
                                'correct_answer': ['Chicago Bulls'],
                                'id': 1})
-players = pd.DataFrame({'username': ['itay', 'oscar', 'test'],
-                        'password': ['a123', 'oscar', 'test'],
-                        'score': [0, 10, 0],
-                        'is_creator': [False, True, False],
-                        'id': [0, 1, 2],
-                        'questions_asked': [[], [], []],
-                        'sid': [None, None, None]})
+
+players = pd.DataFrame({'username': [],
+                        'password': [],
+                        'score': [],
+                        'is_creator': [],
+                        'id': [],
+                        'sid': []})
 
 
 ###########################
@@ -34,7 +34,7 @@ players = pd.DataFrame({'username': ['itay', 'oscar', 'test'],
 @atexit.register
 def cleanup():
     print('-^--^-\n--ww--')
-    logging.info(msg='an error occured, server cleanup and shut down')
+    logging.info(msg='an error occurred, server cleans up and shuts down')
     for sid in players['sid'].values:
         if sid is None:
             continue
@@ -94,7 +94,7 @@ def update_questions_bank_from_web():
 
 
 def write_to_csv():
-    players.to_csv('players.csv')
+    players.to_csv(sys.argv[1], index=False, mode='w')
 
 
 def read_and_append_csv():
@@ -103,6 +103,7 @@ def read_and_append_csv():
     """
     global players
     temp_csv = pd.read_csv(sys.argv[1])
+    # temp_csv = pd.read_csv("players.csv")
     max_id = players.id.max()
     for index, row in temp_csv.iterrows():
         if row.id <= max_id:
@@ -199,8 +200,8 @@ def logout_handler(sid):
 
 
 def create_random_question(sid):
-    q_asked = players.loc[players['sid'] == sid]['questions_asked'].values
-    qid = random.choice([x for x in range(1, questions_bank['id'].max()) if x not in q_asked])
+    # q_asked = players.loc[players['sid'] == sid]['questions_asked'].values
+    qid = random.choice([x for x in range(1, questions_bank['id'].max())])
     question = questions_bank.iloc[qid]
     return str(qid) + '#' + question['question'] + '#' + '#'.join(question['answers'])
 
@@ -222,7 +223,7 @@ def answer_handler(sid, data):
     if questions_bank.iloc[int(qid)]['correct_answer'] == ans:
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['correct'], 'YOU GOT 5 POINTS.')
         user_index = players.loc[players['sid'] == sid].index[0]
-        players.at[user_index, 'questions_asked'].append(qid)
+        # players.at[user_index, 'questions_asked'].append(qid)
         players.at[user_index, 'score'] += 5
     else:
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['wrong'], '')
