@@ -1,5 +1,8 @@
+import asyncio
+import logging
 import signal
 import sys
+import atexit
 import time
 import socketio
 import chatlib
@@ -9,9 +12,11 @@ import chatlib
 ### GLOBALS ###
 ###############
 
-sio = socketio.Client()
-sio.connect('http://127.0.0.1:8080')
+sio = socketio.AsyncClient(logger=True)
+# await sio.connect('http://127.0.0.1:8080')
 is_connected = False
+lock = asyncio.Condition()
+# lock = threading.Lock()
 TIMEOUT = 6
 user_mode = None
 
@@ -26,6 +31,7 @@ def signal_handler(sig, frame):
     print('-^--^-')
     try:
         disconnect()
+        cleanup()
     finally:
         sys.exit(0)
 
@@ -34,7 +40,13 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-def get_input_and_validate(input_choices, menu_msg):
+@atexit.register
+async def cleanup():
+    # TODO: implement the function so that the client will gracefully exit
+    await asyncio.get_event_loop().shutdown_asyncgens()
+
+
+def get_input_and_validate(input_choices: list[str], menu_msg: str) -> str:
     """
     getting an input from user and validate that it's
     taken from {input_choices}.
@@ -61,7 +73,7 @@ def get_input_and_validate(input_choices, menu_msg):
 ###########################
 
 @sio.on('login_callback')
-def login_callback(data):
+async def login_callback(data) -> None:
     global is_connected
     cmd, msg = chatlib.parse_message(data)
     if cmd == 'ERROR':
@@ -70,52 +82,58 @@ def login_callback(data):
         if next_operation == 'e':
             error_and_exit('quiting...')
         elif next_operation == 'l':
-            login_handler()
+            await login_handler()
     else:
         is_connected = True
-        menu(cmd)
-    return
+        lock.release()
+        print("Lock releases in the callback")
 
 
 @sio.on('play_question_callback')
-def play_question_callback(data):
-    cmd, question_data = chatlib.parse_message(data)
-    q_data = chatlib.split_data(question_data, 5)
+async def play_question_callback(data: str) -> None:
+    try:
+        cmd, question_data = chatlib.parse_message(data)
+        q_data = chatlib.split_data(question_data, 5)
 
-    question_pretty_print = [f'\n{x-1} - {q_data[x]}' for x in range(1, len(q_data))]
-    print(''.join(question_pretty_print)[5:])
-    user_ans = int(get_input_and_validate(['1', '2', '3', '4'], 'Your answer: '))
+        question_pretty_print = [f'\n{x-1} - {q_data[x]}' for x in range(1, len(q_data))]
+        print(''.join(question_pretty_print)[5:])
+        user_ans = int(get_input_and_validate(['1', '2', '3', '4'], 'Your answer: '))
 
-    send_answer_handler(q_data[0], q_data[user_ans+1])
+        send_answer_handler(q_data[0], q_data[user_ans+1])
+    except Exception as e:
+        logging.info(msg=f'Catched an error while trying to play question\n>> {e}')
+        print('An error occurred')
+        time.sleep(1.5)
+        menu()
 
 
 @sio.on('answer_callback')
-def get_answer_callback(data):
+def get_answer_callback(data: str) -> None:
     cmd, data = chatlib.parse_message(data)
     print(cmd, data)
-    time.sleep(2)
+    time.sleep(2)  # TODO: async/await
     player_game_menu(cmd)
 
 
 @sio.on('score_callback')
-def get_score_callback(data):
+def get_score_callback(data: str) -> None:
     cmd, score = chatlib.parse_message(data)
     print('Your score:', score)
-    time.sleep(3)
+    time.sleep(3)  # TODO: async/await
     player_game_menu(cmd)
 
 
 @sio.on('highscore_callback')
-def get_highscore_callback(data):
+def get_highscore_callback(data: str) -> None:
     cmd, highscore = chatlib.parse_message(data)
     print(highscore)
-    time.sleep(3)
+    time.sleep(3)  # TODO: async/await
     menu(cmd)
     return
 
 
 @sio.on('add_question_callback')
-def add_question_callback(data):
+def add_question_callback(data: str) -> None:
     cmd, msg = chatlib.parse_message(data)
     print(cmd)
     creator_menu(cmd)
@@ -123,7 +141,7 @@ def add_question_callback(data):
 
 
 @sio.on('error')
-def error_callback(data):
+def error_callback(data: str):
     # TODO: check if necessary and implement if so
     pass
 
@@ -145,7 +163,7 @@ def disconnect():
         return
 
 
-def login_handler():
+async def login_handler() -> None:
     """
     get username and password from the user and login
     :return: None
@@ -157,7 +175,9 @@ def login_handler():
     user_mode = get_input_and_validate(['1', '2'], user_mode_msg)
     data = [username, password, user_mode]
     print('Logging in...')
-    sio.emit(event='login', data='#'.join(data))
+    await sio.emit(event='login', data='#'.join(data))
+    await lock.acquire()
+    print("Lock acquired in login_handler")
 
 
 def logout_handler():
@@ -168,7 +188,7 @@ def logout_handler():
         exit()
 
 
-def error_and_exit(error_msg):
+def error_and_exit(error_msg: str):
     print(error_msg)
     try:
         disconnect()
@@ -176,24 +196,24 @@ def error_and_exit(error_msg):
         exit()
 
 
-def play_question_handler():
+def play_question_handler() -> None:
     sio.emit(event='play_question')
 
 
-def send_answer_handler(qid, ans):
+def send_answer_handler(qid: str, ans: str) -> None:
     data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['send_ans'], qid + '#' + ans)
     sio.emit(event='answer', data=data_to_send)
 
 
-def get_score_handler():
+def get_score_handler() -> None:
     sio.emit(event='server_score')
 
 
-def get_highscore_handler():
+def get_highscore_handler() -> None:
     sio.emit(event='server_highscore')
 
 
-def add_question_handler():
+def add_question_handler() -> None:
     question = input('Write the question: ')
     if not question.endswith('?'):
         question += '?'
@@ -208,7 +228,7 @@ def add_question_handler():
 ### Client Process ###
 ######################
 
-def menu(cmd=None):
+def menu(cmd: str = None) -> None:
     """
     a small menu pipe to call the relevant menu
     :param cmd: a command to be sent for the next menu
@@ -220,7 +240,7 @@ def menu(cmd=None):
     return
 
 
-def player_game_menu(cmd=None):
+def player_game_menu(cmd: str = None) -> None:
     """
     a menu for regular player
     :param cmd: for optional use case later (not used right now)
@@ -246,7 +266,7 @@ def player_game_menu(cmd=None):
     return
 
 
-def creator_menu(cmd=None):
+async def creator_menu(cmd: str = None) -> None:
     """
     a menu for creator
     :param cmd: for optional use case later (not used right now)
@@ -254,7 +274,8 @@ def creator_menu(cmd=None):
     creator_menu_msg = """
 1 - Add question
 2 - Get highscore
-3 - Log out\n"""
+3 - Logged users
+4 - Log out\n"""
     command = get_input_and_validate(['1', '2', '3'], creator_menu_msg)
     match command:
         case '1':
@@ -262,6 +283,9 @@ def creator_menu(cmd=None):
         case '2':
             get_highscore_handler()
         case '3':
+            # TODO: write a function that gets the logged in users
+            pass
+        case '4':
             logout_handler()
             return
         case _:
@@ -269,10 +293,26 @@ def creator_menu(cmd=None):
     return
 
 
+async def start():
+    try:
+        await sio.connect('http://127.0.0.1:8080')
+        asyncio.create_task(login_handler())
+        print('waiting...')
+        await asyncio.wait_for(lock.acquire(), timeout=TIMEOUT)
+        print('released')
+    except asyncio.TimeoutError:
+        print("Timed out waiting for the lock")
+    else:
+        menu()
+
+
 if __name__ == '__main__':
-    login_handler()
+    print("WELCOME")
+    asyncio.run(start())
+    print(299)
+
     # after TIMEOUT is done and nothing happened, the program gracefully exit
     time.sleep(TIMEOUT)
     if not is_connected:
         print('Shut down')
-        exit(0)
+        exit(1)
