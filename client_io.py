@@ -13,7 +13,7 @@ import chatlib
 sio = socketio.AsyncClient(logger=True)
 # await sio.connect('http://127.0.0.1:8080')
 is_connected = False
-TIMEOUT = 6
+TIMEOUT = 16
 user_mode = None
 
 

@@ -1,7 +1,7 @@
 import sqlite3
 
 
-class Repository():
+class Repository:
     def __init__(self, db_location):
         self.connection = db_location
 
@@ -18,10 +18,13 @@ class Repository():
         cur.close()
 
     def close_db(self):
+        """
+        gracefully committing and closing the database
+        """
         self.connection.commit()
         self.connection.close()
 
-    def update_player_sid(self, sid: str, player_id: int):
+    def set_player_sid(self, sid: str, player_id: int):
         cur = self.connection.cursor()
         cmd = """
             UPDATE players_data 
@@ -40,6 +43,14 @@ class Repository():
 
     def add_player(self, username: str, password: str, is_creator: bool,
                    player_id: int, sid: str = None):
+        """
+        insert a new player to the database
+        :param username: the name of the new player
+        :param password: its password
+        :param is_creator: indicate whether the player is a creator
+        :param player_id: the id number of the player
+        :param sid: the current session id of the player/client
+        """
         cur = self.connection.cursor()
         cmd = """
             INSERT INTO players_data
