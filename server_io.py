@@ -94,7 +94,7 @@ def update_questions_bank_from_web():
 
 
 def write_to_csv():
-    players.to_csv('players.csv')
+    players.to_csv(sys.argv[1])
 
 
 def read_and_append_csv():
