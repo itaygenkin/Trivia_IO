@@ -12,7 +12,7 @@ import chatlib
 sio = socketio.Client()
 sio.connect('http://127.0.0.1:8080')
 is_connected = False
-TIMEOUT = 6
+TIMEOUT = 8
 user_mode = None
 
 
@@ -111,7 +111,6 @@ def get_highscore_callback(data):
     print(highscore)
     time.sleep(3)
     menu(cmd)
-    return
 
 
 @sio.on('add_question_callback')
@@ -119,7 +118,14 @@ def add_question_callback(data):
     cmd, msg = chatlib.parse_message(data)
     print(cmd)
     creator_menu(cmd)
-    return
+
+
+@sio.on('get_logged_in_callback')
+def get_logged_in_users_callback(data):
+    cmd, msg = chatlib.parse_message(data)
+    print(cmd)
+    print(msg)
+    creator_menu(cmd)
 
 
 @sio.on('error')
@@ -204,6 +210,10 @@ def add_question_handler():
     sio.emit(event='server_add_question', data=data_to_send)
 
 
+def get_logged_in_handler():
+    sio.emit(event='logged_in_users')
+
+
 ######################
 ### Client Process ###
 ######################
@@ -254,14 +264,17 @@ def creator_menu(cmd=None):
     creator_menu_msg = """
 1 - Add question
 2 - Get highscore
-3 - Log out\n"""
-    command = get_input_and_validate(['1', '2', '3'], creator_menu_msg)
+3 - Get logged in users
+4 - Log out\n"""
+    command = get_input_and_validate(['1', '2', '3', '4'], creator_menu_msg)
     match command:
         case '1':
             add_question_handler()
         case '2':
             get_highscore_handler()
         case '3':
+            get_logged_in_handler()
+        case '4':
             logout_handler()
             return
         case _:

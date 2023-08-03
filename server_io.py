@@ -264,6 +264,14 @@ def add_question_handler(sid, data):
         sio.emit(event='add_question_callback', data=data_to_send, to=sid)
 
 
+@sio.on('logged_in_users')
+def get_logged_in_users(sid):
+    logged_in_users = players.loc[players['sid'].notnull()][['username', 'id']]
+    data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['logged_in'], logged_in_users.to_string())
+    sio.emit(event='get_logged_in_callback', data=data_to_send, to=sid)
+    print('[SERVER] ', data_to_send)
+
+
 ###################
 ### APP PROCESS ###
 ###################

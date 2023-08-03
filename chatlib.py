@@ -18,7 +18,8 @@ PROTOCOL_CLIENT = {
 	"send_ans": "SEND_ANSWER",
 	"score": "MY_SCORE",
 	"high": "HIGHSCORE",
-	"add": "ADD_QUESTION"
+	"add": "ADD_QUESTION",
+	"logged_in": "LOGGED_IN_USERS"
 }
 
 SEMI_PROTOCOL_CLIENT = {
@@ -135,4 +136,3 @@ def convert_user_mode(mode):
 	elif mode == '1':
 		return False
 	return None
-
