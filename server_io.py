@@ -66,6 +66,9 @@ def gather_answers(correct_answer, incorrect_answers):
 def update_questions_bank_from_web():  
     global questions_bank
     response = requests.get(url="https://opentdb.com/api.php?amount=50&type=multiple")
+    if not response.ok:
+        logging.info(msg=f'GET request failed. Status code: {response.status_code}')
+        exit()
     payload = response.json()['results']
 
     questions = []
@@ -279,7 +282,4 @@ def get_logged_in_users(sid):
 if __name__ == '__main__':
     update_questions_bank_from_web()
     read_and_append_csv()
-    print(players)
-    # 3,shuky,shuk,5,False,3,[],
-    # write_to_csv()
     eventlet.wsgi.server(eventlet.listen((host, port)), app)
