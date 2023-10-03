@@ -12,7 +12,7 @@ import chatlib
 sio = socketio.Client()
 sio.connect('http://127.0.0.1:8080')
 is_connected = False
-TIMEOUT = 8
+TIMEOUT = 38
 user_mode = None
 
 
@@ -144,11 +144,10 @@ def disconnect():
         sio.disconnect()
         print("Disconnected!")
         is_connected = False
-        exit()
     except Exception as e:
         print(e)
     finally:
-        return
+        exit()
 
 
 def login_handler():
@@ -284,6 +283,7 @@ def creator_menu(cmd=None):
 
 if __name__ == '__main__':
     login_handler()
+    # TODO: add a LOCKER which waits TIMEOUT seconds to let the user log in
     # after TIMEOUT is done and nothing happened, the program gracefully exit
     time.sleep(TIMEOUT)
     if not is_connected:
