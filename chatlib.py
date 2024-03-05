@@ -44,6 +44,8 @@ PROTOCOL_SERVER = {
 	"add_succ": "ADD_QUESTION_SUCCESSFULLY"
 }
 
+PROTOCOL_USER_MODE = {'1': False, 2: True}  # 1 is user (NOT manager) - False, 2 is manager - True
+
 
 def build_message(cmd, data):
 	"""

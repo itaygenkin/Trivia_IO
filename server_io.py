@@ -159,7 +159,7 @@ def login_handler(sid, data):
     msg_back = ""
     try:
         [user, password, mode] = chatlib.split_data(data, 2)
-        user_mode = chatlib.convert_user_mode(mode)
+        user_mode = chatlib.PROTOCOL_USER_MODE[mode]
 
         # check username and password correctness
         if user not in players['username'].values or \
@@ -177,6 +177,8 @@ def login_handler(sid, data):
                                       (players['password'] == password)]['is_creator'].values[0]:
             print(user_mode)
             print(players.loc[(players['username'] == user) &
+                                      (players['password'] == password)]['is_creator'].values[0])
+            print(user_mode != players.loc[(players['username'] == user) &
                                       (players['password'] == password)]['is_creator'].values[0])
             err_msg = f"{user} does not have manager permission"
             msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)

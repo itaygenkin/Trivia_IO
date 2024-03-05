@@ -34,7 +34,7 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-def get_input_and_validate(input_choices, menu_msg):
+def get_input_and_validate(input_choices: list[str], menu_msg: str) -> str:
     """
     getting an input from user and validate that it's
     taken from {input_choices}.
@@ -61,34 +61,29 @@ def get_input_and_validate(input_choices, menu_msg):
 ###########################
 
 @sio.on('login_callback')
-def login_callback(data):
+def login_callback(data: str) -> None:
     global is_connected
     cmd, msg = chatlib.parse_message(data)
     if cmd == 'ERROR':
         print('Login failed: ', msg)
-        # next_operation = get_input_and_validate(['e', 'l'], 'e - exit\nl - log in\n')
-        # if next_operation == 'e':
-        #     error_and_exit('quiting...')
-        # elif next_operation == 'l':
-        #     login_handler()
     else:
         is_connected = True
     locker.set()
 
 
 @sio.on('add_question_callback')
-def add_question_callback(data):
+def add_question_callback(data: str) -> None:
     cmd, msg = chatlib.parse_message(data)
     print(cmd)
-    # manager_menu(cmd)
+    locker.set()
 
 
 @sio.on('get_logged_in_callback')
-def get_logged_in_users_callback(data):
+def get_logged_in_users_callback(data: str) -> None:
     cmd, msg = chatlib.parse_message(data)
     print(cmd)
     print(msg)
-    # manager_menu(cmd)
+    locker.set()
 
 
 @sio.on('error')
@@ -116,13 +111,13 @@ def login_handler() -> None:
     get m_name and password from the manager and login
     :return: None
     """
-    username = input('Please enter m_name: ')
+    print("Hey Manager,")
+    username = input('Please enter your name: ')
     password = input('Please enter password: ')
     user_mode = '2'
     data = [username, password, user_mode]
     print('Logging in...')
     sio.emit(event='login', data='#'.join(data))
-    locker.set()
 
 
 def logout_handler() -> None:
@@ -155,7 +150,6 @@ def add_question_handler() -> None:
 
 def get_logged_in_handler() -> None:
     sio.emit(event='logged_in_users')
-    locker.set()
 
 
 def manager_menu(cmd=None) -> bool | None:
@@ -187,7 +181,7 @@ def main() -> None:
     while not is_connected:
         login_handler()
         time.sleep(0.1)
-        locker.wait(timeout=TIMEOUT)
+        locker.wait()
         locker.clear()
 
     # step 2: main menu
@@ -201,6 +195,4 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-    if is_connected:
-        main()
 

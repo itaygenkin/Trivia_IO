@@ -1,5 +1,6 @@
 import signal
 import sys
+import threading
 import time
 import socketio
 import chatlib
@@ -11,8 +12,9 @@ import chatlib
 
 sio = socketio.Client()
 sio.connect('http://127.0.0.1:8080')
+locker = threading.Event()
 is_connected = False
-TIMEOUT = 38
+TIMEOUT = 18
 
 
 def signal_handler(sig, frame):
@@ -33,7 +35,7 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-def get_input_and_validate(input_choices, menu_msg):
+def get_input_and_validate(input_choices: list[str], menu_msg: str) -> str:
     """
     getting an input from user and validate that it's
     taken from {input_choices}.
@@ -60,24 +62,18 @@ def get_input_and_validate(input_choices, menu_msg):
 ###########################
 
 @sio.on('login_callback')
-def login_callback(data):
+def login_callback(data) -> None:
     global is_connected
     cmd, msg = chatlib.parse_message(data)
     if cmd == 'ERROR':
         print('Login failed: ', msg)
-        next_operation = get_input_and_validate(['e', 'l'], 'e - exit\nl - log in\n')
-        if next_operation == 'e':
-            error_and_exit('quiting...')
-        elif next_operation == 'l':
-            login_handler()
     else:
         is_connected = True
-        player_game_menu(cmd)
-    return
+    locker.set()
 
 
 @sio.on('play_question_callback')
-def play_question_callback(data):
+def play_question_callback(data) -> None:
     cmd, question_data = chatlib.parse_message(data)
     q_data = chatlib.split_data(question_data, 5)
 
@@ -86,30 +82,32 @@ def play_question_callback(data):
     user_ans = int(get_input_and_validate(['1', '2', '3', '4'], 'Your answer: '))
 
     send_answer_handler(q_data[0], q_data[user_ans+1])
+    locker.set()
 
 
 @sio.on('answer_callback')
-def get_answer_callback(data):
+def get_answer_callback(data) -> None:
     cmd, data = chatlib.parse_message(data)
     print(cmd, data)
-    time.sleep(2)
-    player_game_menu(cmd)
+    time.sleep(2.5)
+    locker.set()
 
 
 @sio.on('score_callback')
-def get_score_callback(data):
+def get_score_callback(data) -> None:
     cmd, score = chatlib.parse_message(data)
     print('Your score:', score)
     time.sleep(3)
-    player_game_menu(cmd)
+    locker.set()
 
 
 @sio.on('highscore_callback')
-def get_highscore_callback(data):
+def get_highscore_callback(data) -> None:
     cmd, highscore = chatlib.parse_message(data)
     print(highscore)
     time.sleep(3)
-    player_game_menu(cmd)
+    # player_game_menu(cmd)
+    locker.set()
 
 
 @sio.on('error')
@@ -122,7 +120,7 @@ def error_callback(data):
 ### Socket-IO Handlers ###
 ##########################
 
-def disconnect():
+def disconnect() -> None:
     global is_connected
     try:
         sio.disconnect()
@@ -130,11 +128,9 @@ def disconnect():
         is_connected = False
     except Exception as e:
         print(e)
-    finally:
-        exit()
 
 
-def login_handler():
+def login_handler() -> None:
     """
     get username and password from the user and login
     :return: None
@@ -147,7 +143,7 @@ def login_handler():
     sio.emit(event='login', data='#'.join(data))
 
 
-def logout_handler():
+def logout_handler() -> None:
     try:
         sio.emit('logout_handler', data='')
     finally:
@@ -155,7 +151,7 @@ def logout_handler():
         exit()
 
 
-def error_and_exit(error_msg):
+def error_and_exit(error_msg) -> None:
     print(error_msg)
     try:
         disconnect()
@@ -163,24 +159,24 @@ def error_and_exit(error_msg):
         exit()
 
 
-def play_question_handler():
+def play_question_handler() -> None:
     sio.emit(event='play_question')
 
 
-def send_answer_handler(qid, ans):
+def send_answer_handler(qid, ans) -> None:
     data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['send_ans'], qid + '#' + ans)
     sio.emit(event='answer', data=data_to_send)
 
 
-def get_score_handler():
+def get_score_handler() -> None:
     sio.emit(event='server_score')
 
 
-def get_highscore_handler():
+def get_highscore_handler() -> None:
     sio.emit(event='server_highscore')
 
 
-def get_logged_in_handler():
+def get_logged_in_handler() -> None:
     sio.emit(event='logged_in_users')
 
 
@@ -189,7 +185,7 @@ def get_logged_in_handler():
 ######################
 
 
-def player_game_menu(cmd=None):
+def player_menu(cmd=None):
     """
     a menu for regular player
     :param cmd: for optional use case later (not used right now)
@@ -209,17 +205,36 @@ def player_game_menu(cmd=None):
             get_highscore_handler()
         case '4':
             logout_handler()
-            return
+            return True
         case _:
             return
-    return
+
+
+def main() -> None:
+    global is_connected
+
+    # step 1: log in
+    while not is_connected:
+        login_handler()
+        time.sleep(0.1)
+        locker.wait()
+        locker.clear()
+
+    # step 2: main menu
+    while True:
+        if player_menu():
+            break
+        time.sleep(0.1)
+        locker.wait()
+        locker.clear()
 
 
 if __name__ == '__main__':
-    login_handler()
-    # TODO: add a LOCKER which waits TIMEOUT seconds to let the user log in
-    # after TIMEOUT is done and nothing happened, the program gracefully exit
-    time.sleep(TIMEOUT)
-    if not is_connected:
-        print('Shut down')
-        exit(0)
+    main()
+    # login_handler()
+    # # TODO: add a LOCKER which waits TIMEOUT seconds to let the user log in
+    # # after TIMEOUT is done and nothing happened, the program gracefully exit
+    # time.sleep(TIMEOUT)
+    # if not is_connected:
+    #     print('Shut down')
+    #     exit(0)
