@@ -106,7 +106,6 @@ def read_and_append_csv():
     """
     global players
     temp_csv = pd.read_csv(sys.argv[1])
-    # temp_csv = pd.read_csv("players.csv")
     max_id = players.id.max()
     for index, row in temp_csv.iterrows():
         if row.id <= max_id:
@@ -174,9 +173,12 @@ def login_handler(sid, data):
             msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
 
         # check if user tried to log in without the right permission
-        elif user_mode and not players.loc[(players['username'] == user) &
-                                           (players['password'] == password)]['is_creator'].values[0]:
-            err_msg = f"{user} is not permitted to log in as a creator"
+        elif user_mode != players.loc[(players['username'] == user) &
+                                      (players['password'] == password)]['is_creator'].values[0]:
+            print(user_mode)
+            print(players.loc[(players['username'] == user) &
+                                      (players['password'] == password)]['is_creator'].values[0])
+            err_msg = f"{user} does not have manager permission"
             msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
 
         # the user has successfully logged in
@@ -191,7 +193,8 @@ def login_handler(sid, data):
         send_error(sid, "Incorrect username or password")
     except Exception as e:
         msg_back = 'Failed to log in. Try again.'
-        logging.info(msg=f'Something wrong happened when a user tried to log in.\nsid: {sid}\nException: {e}')
+        logging.info(msg=f'Exception>> login_handler>> {e}')
+        logging.info(msg=f'Something wrong happened when a user tried to log in.\nsid: {sid}')
     finally:
         sio.emit(event='login_callback', to=sid, data=msg_back)
         print('[SERVER] ', msg_back)
@@ -260,9 +263,10 @@ def add_question_handler(sid, data):
         questions_bank._append(question_to_add)
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['add_succ'], "")
         logging.info(msg='successfully added question')
-    except Exception:
+    except Exception as e:
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['error'], 'Failed to add the question.')
         logging.info(msg='Failed to add question')
+        logging.info(msg=f'Exception>> add_question_handler>> {e}')
     finally:
         sio.emit(event='add_question_callback', data=data_to_send, to=sid)
 

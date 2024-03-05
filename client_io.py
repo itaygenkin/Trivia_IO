@@ -13,7 +13,6 @@ sio = socketio.Client()
 sio.connect('http://127.0.0.1:8080')
 is_connected = False
 TIMEOUT = 38
-user_mode = None
 
 
 def signal_handler(sig, frame):
@@ -73,7 +72,7 @@ def login_callback(data):
             login_handler()
     else:
         is_connected = True
-        menu(cmd)
+        player_game_menu(cmd)
     return
 
 
@@ -110,22 +109,7 @@ def get_highscore_callback(data):
     cmd, highscore = chatlib.parse_message(data)
     print(highscore)
     time.sleep(3)
-    menu(cmd)
-
-
-@sio.on('add_question_callback')
-def add_question_callback(data):
-    cmd, msg = chatlib.parse_message(data)
-    print(cmd)
-    creator_menu(cmd)
-
-
-@sio.on('get_logged_in_callback')
-def get_logged_in_users_callback(data):
-    cmd, msg = chatlib.parse_message(data)
-    print(cmd)
-    print(msg)
-    creator_menu(cmd)
+    player_game_menu(cmd)
 
 
 @sio.on('error')
@@ -155,11 +139,9 @@ def login_handler():
     get username and password from the user and login
     :return: None
     """
-    global user_mode
     username = input('Please enter username: ')
     password = input('Please enter password: ')
-    user_mode_msg = 'Choose Player(1) or Creator(2): '
-    user_mode = get_input_and_validate(['1', '2'], user_mode_msg)
+    user_mode = '1'
     data = [username, password, user_mode]
     print('Logging in...')
     sio.emit(event='login', data='#'.join(data))
@@ -198,17 +180,6 @@ def get_highscore_handler():
     sio.emit(event='server_highscore')
 
 
-def add_question_handler():
-    question = input('Write the question: ')
-    if not question.endswith('?'):
-        question += '?'
-    answers = [input(f'Write answer number {i}: ') for i in range(1, 5)]
-    correct_answer = input('Write the correct answer: ')
-    question_data = [question, *answers, correct_answer]
-    data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['add'], '#'.join(question_data))
-    sio.emit(event='server_add_question', data=data_to_send)
-
-
 def get_logged_in_handler():
     sio.emit(event='logged_in_users')
 
@@ -216,17 +187,6 @@ def get_logged_in_handler():
 ######################
 ### Client Process ###
 ######################
-
-def menu(cmd=None):
-    """
-    a small menu pipe to call the relevant menu
-    :param cmd: a command to be sent for the next menu
-    """
-    if user_mode == '1':
-        player_game_menu(cmd)
-    elif user_mode == '2':
-        creator_menu(cmd)
-    return
 
 
 def player_game_menu(cmd=None):
@@ -247,32 +207,6 @@ def player_game_menu(cmd=None):
             get_score_handler()
         case '3':
             get_highscore_handler()
-        case '4':
-            logout_handler()
-            return
-        case _:
-            return
-    return
-
-
-def creator_menu(cmd=None):
-    """
-    a menu for creator
-    :param cmd: for optional use case later (not used right now)
-    """
-    creator_menu_msg = """
-1 - Add question
-2 - Get highscore
-3 - Get logged in users
-4 - Log out\n"""
-    command = get_input_and_validate(['1', '2', '3', '4'], creator_menu_msg)
-    match command:
-        case '1':
-            add_question_handler()
-        case '2':
-            get_highscore_handler()
-        case '3':
-            get_logged_in_handler()
         case '4':
             logout_handler()
             return

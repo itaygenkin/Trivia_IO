@@ -77,7 +77,6 @@ def parse_message(data):
 	msg = lst[2]
 	if (cmd not in PROTOCOL_CLIENT.values() and cmd not in PROTOCOL_SERVER.values()) or not is_number(num) or len(msg) != int(num):
 		return None, None
-	# The function should return 2 values
 	return cmd, msg
 
 
@@ -85,7 +84,7 @@ def is_number(num):
 	"""
 	Check whether num is a 4-digit-number (or padded by 0 to 4 digits)
 	:param num: str
-	:rtype: boolean
+	:rtype: bool
 	"""
 	if len(num) != 4 or num == '    ':
 		return False
@@ -136,3 +135,9 @@ def convert_user_mode(mode):
 	elif mode == '1':
 		return False
 	return None
+
+
+def compare_pw(pw1: str, pw2: str) -> bool:
+	pw1 = [pw1[i] for i in range(0, len(pw1), 2)]
+	pw2 = [pw2[i] for i in range(0, len(pw2), 2)]
+	return pw1 == pw2
