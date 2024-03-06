@@ -106,7 +106,6 @@ def get_highscore_callback(data) -> None:
     cmd, highscore = chatlib.parse_message(data)
     print(highscore)
     time.sleep(3)
-    # player_game_menu(cmd)
     locker.set()
 
 
@@ -231,10 +230,4 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-    # login_handler()
-    # # TODO: add a LOCKER which waits TIMEOUT seconds to let the user log in
-    # # after TIMEOUT is done and nothing happened, the program gracefully exit
-    # time.sleep(TIMEOUT)
-    # if not is_connected:
-    #     print('Shut down')
-    #     exit(0)
+

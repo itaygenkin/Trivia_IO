@@ -22,9 +22,10 @@ questions_bank = pd.DataFrame({'question': ['Which Basketball team has completed
 players = pd.DataFrame({'username': [],
                         'password': [],
                         'score': [],
-                        'is_creator': [],
+                        'is_manager': [],
                         'id': [],
-                        'sid': []})
+                        'sid': [],
+                        'games_played': []})
 
 
 ###########################
@@ -174,12 +175,12 @@ def login_handler(sid, data):
 
         # check if user tried to log in without the right permission
         elif user_mode != players.loc[(players['username'] == user) &
-                                      (players['password'] == password)]['is_creator'].values[0]:
+                                      (players['password'] == password)]['is_manager'].values[0]:
             print(user_mode)
             print(players.loc[(players['username'] == user) &
-                                      (players['password'] == password)]['is_creator'].values[0])
+                                      (players['password'] == password)]['is_manager'].values[0])
             print(user_mode != players.loc[(players['username'] == user) &
-                                      (players['password'] == password)]['is_creator'].values[0])
+                                      (players['password'] == password)]['is_manager'].values[0])
             err_msg = f"{user} does not have manager permission"
             msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
 
@@ -227,14 +228,14 @@ def answer_handler(sid, data):
     cmd, msg = chatlib.parse_message(data)
     qid, ans = chatlib.split_data(msg, 1)
 
+    user_index = players.loc[players['sid'] == sid].index[0]
     # check if the user is correct
     if questions_bank.iloc[int(qid)]['correct_answer'] == ans:
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['correct'], 'YOU GOT 5 POINTS.')
-        user_index = players.loc[players['sid'] == sid].index[0]
-        # players.at[user_index, 'questions_asked'].append(qid)
         players.at[user_index, 'score'] += 5
     else:
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['wrong'], '')
+    players.at[user_index, 'games_played'] += 1
     sio.emit(event='answer_callback', data=data_to_send, to=sid)
 
 

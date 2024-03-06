@@ -128,7 +128,7 @@ def logout_handler() -> None:
         exit()
 
 
-def error_and_exit(error_msg) -> None:
+def error_and_exit(error_msg: str) -> None:
     print(error_msg)
     try:
         disconnect()
