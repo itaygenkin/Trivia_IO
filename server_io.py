@@ -209,7 +209,6 @@ def logout_handler(sid):
 
 
 def create_random_question(sid):
-    # q_asked = players.loc[players['sid'] == sid]['questions_asked'].values
     qid = random.choice([x for x in range(1, questions_bank['id'].max())])
     question = questions_bank.iloc[qid]
     return str(qid) + '#' + question['question'] + '#' + '#'.join(question['answers'])
@@ -265,21 +264,38 @@ def add_question_handler(sid, data):
                                         'correct_answer': q_data[5], 'id': max_id})
         questions_bank._append(question_to_add)
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['add_succ'], "")
-        logging.info(msg='successfully added question')
     except Exception as e:
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['error'], 'Failed to add the question.')
         logging.info(msg='Failed to add question')
         logging.info(msg=f'Exception>> add_question_handler>> {e}')
-    finally:
+        sio.emit(event='error_callback', data=data_to_send, to=sid)
+    else:
+        logging.info(msg='successfully added question')
         sio.emit(event='add_question_callback', data=data_to_send, to=sid)
 
 
 @sio.on('logged_in_users')
-def get_logged_in_users(sid):
+def get_logged_in_users_handler(sid):
     logged_in_users = players.loc[players['sid'].notnull()][['username', 'id']]
     data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['logged_in'], logged_in_users.to_string())
     sio.emit(event='get_logged_in_callback', data=data_to_send, to=sid)
     print('[SERVER] ', data_to_send)
+
+
+@sio.on('register_player')
+def register_player_handler(sid, data: str) -> None:
+    cmd, username, password = chatlib.split_data(data, 2)
+    try:
+        players.loc[len(players.index)] = [username, password, 0, False, players.id.max() + 1, None, 0]
+        ack_msg = f'successfully registered {username}'
+        print(f'[SERVER] ', ack_msg)
+    except Exception as e:
+        logging.info(msg=f'Exception>> register_player_handler>> {e}')
+        sio.emit(event='error_callback', data='Failed to register player', to=sid)
+    else:
+        logging.info(msg=ack_msg)
+        data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['reg_succ'], f"Failed to register {username}")
+        sio.emit(event='register_player_callback', data=data_to_send, to=sid)
 
 
 ###################

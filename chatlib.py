@@ -22,14 +22,6 @@ PROTOCOL_CLIENT = {
 	"logged_in": "LOGGED_IN_USERS"
 }
 
-SEMI_PROTOCOL_CLIENT = {
-	'1': "GET_QUESTION",
-	'2': "MY_SCORE",
-	'3': "HIGHSCORE",
-	'4': "LOGGED",
-	'5': "LOGOUT"
-}
-
 PROTOCOL_SERVER = {
 	"login_ok_msg": "LOGIN_OK",
 	"login_failed_msg": "ERROR",
@@ -41,7 +33,8 @@ PROTOCOL_SERVER = {
 	"all_score": "ALL_SCORE",
 	"error": "ERROR",
 	"no_ques": "NO_QUESTION",
-	"add_succ": "ADD_QUESTION_SUCCESSFULLY"
+	"add_succ": "ADD_QUESTION_SUCCESSFULLY",
+	"reg_succ": "REGISTER_SUCCESSFULLY"
 }
 
 PROTOCOL_USER_MODE = {'1': False, 2: True}  # 1 is user (NOT manager) - False, 2 is manager - True
@@ -138,8 +131,3 @@ def convert_user_mode(mode):
 		return False
 	return None
 
-
-def compare_pw(pw1: str, pw2: str) -> bool:
-	pw1 = [pw1[i] for i in range(0, len(pw1), 2)]
-	pw2 = [pw2[i] for i in range(0, len(pw2), 2)]
-	return pw1 == pw2

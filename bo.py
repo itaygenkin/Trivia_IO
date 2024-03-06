@@ -86,10 +86,19 @@ def get_logged_in_users_callback(data: str) -> None:
     locker.set()
 
 
-@sio.on('error')
-def error_callback(data):
-    # TODO: check if necessary and implement if so
-    pass
+@sio.on('register_player_callback')
+def register_player_callback(data: str) -> None:
+    cmd, msg = chatlib.parse_message(data)
+    print(msg)
+    locker.set()
+
+
+@sio.on('error_callback')
+def error_callback(data: str) -> None:
+    cmd, msg = chatlib.parse_message(data)
+    print(cmd)
+    print(msg)
+    locker.set()
 
 
 ##########################
@@ -152,6 +161,14 @@ def get_logged_in_handler() -> None:
     sio.emit(event='logged_in_users')
 
 
+def register_player_handler() -> None:
+    username = input('Enter username: ')
+    password = input('Enter password: ')
+    new_player_data = chatlib.build_message(chatlib.PROTOCOL_CLIENT['register'], '#'.join([username, password]))
+    sio.emit(event='register_player', data=new_player_data)
+
+
+
 def manager_menu(cmd=None) -> bool | None:
     """
     a menu for manager
@@ -160,7 +177,8 @@ def manager_menu(cmd=None) -> bool | None:
     creator_menu_msg = """
 1 - Add question
 2 - Get logged in users
-3 - Log out\n"""
+3 - Register new player
+4 - Log out\n"""
     command = get_input_and_validate(['1', '2', '3'], creator_menu_msg)
     match command:
         case '1':
@@ -168,6 +186,8 @@ def manager_menu(cmd=None) -> bool | None:
         case '2':
             get_logged_in_handler()
         case '3':
+            register_player_handler()
+        case '4':
             logout_handler()
             return True
         case _:

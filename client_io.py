@@ -109,10 +109,12 @@ def get_highscore_callback(data) -> None:
     locker.set()
 
 
-@sio.on('error')
-def error_callback(data):
-    # TODO: check if necessary and implement if so
-    pass
+@sio.on('error_callback')
+def error_callback(data: str) -> None:
+    cmd, msg = chatlib.parse_message(data)
+    print(cmd)
+    print(msg)
+    locker.set()
 
 
 ##########################
