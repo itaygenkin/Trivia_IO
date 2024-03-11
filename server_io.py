@@ -159,7 +159,7 @@ def send_error(sid, error_msg):
 def login_handler(sid, data):
     msg_back = ""
     try:
-        [user, password, mode] = chatlib.split_data(data, 2)
+        [user, password, mode] = chatlib.split_data(data, 3)
         user_mode = chatlib.PROTOCOL_USER_MODE[mode]
 
         # check username and password correctness
@@ -176,11 +176,6 @@ def login_handler(sid, data):
         # check if user tried to log in without the right permission
         elif user_mode != players.loc[(players['username'] == user) &
                                       (players['password'] == password)]['is_manager'].values[0]:
-            print(user_mode)
-            print(players.loc[(players['username'] == user) &
-                                      (players['password'] == password)]['is_manager'].values[0])
-            print(user_mode != players.loc[(players['username'] == user) &
-                                      (players['password'] == password)]['is_manager'].values[0])
             err_msg = f"{user} does not have manager permission"
             msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
 
@@ -194,9 +189,9 @@ def login_handler(sid, data):
     except AttributeError as e:
         msg_back = 'Failed to log in. Try again.'
         send_error(sid, "Incorrect username or password")
-    except Exception as e:
+    except Exception as ex:
         msg_back = 'Failed to log in. Try again.'
-        logging.info(msg=f'Exception>> login_handler>> {e}')
+        logging.info(msg=f'Exception>> login_handler>> {ex}')
         logging.info(msg=f'Something wrong happened when a user tried to log in.\nsid: {sid}')
     finally:
         sio.emit(event='login_callback', to=sid, data=msg_back)
@@ -208,7 +203,7 @@ def logout_handler(sid):
     sio.disconnect(sid)
 
 
-def create_random_question(sid):
+def create_random_question():
     qid = random.choice([x for x in range(1, questions_bank['id'].max())])
     question = questions_bank.iloc[qid]
     return str(qid) + '#' + question['question'] + '#' + '#'.join(question['answers'])
@@ -216,7 +211,7 @@ def create_random_question(sid):
 
 @sio.on('play_question')
 def play_question_handler(sid):
-    question_data = create_random_question(sid)
+    question_data = create_random_question()
     data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['question'], question_data)
     sio.emit(event='play_question_callback', data=data_to_send, to=sid)
     print('[SERVER] ', data_to_send)
@@ -225,7 +220,7 @@ def play_question_handler(sid):
 @sio.on('answer')
 def answer_handler(sid, data):
     cmd, msg = chatlib.parse_message(data)
-    qid, ans = chatlib.split_data(msg, 1)
+    qid, ans = chatlib.split_data(msg, 2)
 
     user_index = players.loc[players['sid'] == sid].index[0]
     # check if the user is correct
@@ -256,7 +251,6 @@ def get_highscore_handler(sid):
 
 @sio.on('server_add_question')
 def add_question_handler(sid, data):
-    data_to_send = ''
     try:
         q_data = chatlib.parse_message(data)
         max_id = questions_bank.id.max()
@@ -284,18 +278,33 @@ def get_logged_in_users_handler(sid):
 
 @sio.on('register_player')
 def register_player_handler(sid, data: str) -> None:
-    cmd, username, password = chatlib.split_data(data, 2)
     try:
-        players.loc[len(players.index)] = [username, password, 0, False, players.id.max() + 1, None, 0]
-        ack_msg = f'successfully registered {username}'
-        print(f'[SERVER] ', ack_msg)
-    except Exception as e:
-        logging.info(msg=f'Exception>> register_player_handler>> {e}')
-        sio.emit(event='error_callback', data='Failed to register player', to=sid)
+        username, password = chatlib.split_data(data, 4)[2:]
+    except TypeError as te:
+        logging.info(msg=f'Error>> register_player_handler>> {te}')
+        logging.info(msg='can\'t parse data')
+        sio.emit(event='error_callback', data='can\'t parse data', to=sid)
     else:
-        logging.info(msg=ack_msg)
-        data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['reg_succ'], f"Failed to register {username}")
-        sio.emit(event='register_player_callback', data=data_to_send, to=sid)
+        # username must be unique
+        # check for username has already registered
+        if username in players['username'].values:
+            logging.info(msg=f'tried to register an existing player, username: {username}')
+            data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['reg_fail'], f"username \'{username}\' has"
+                                                                                      f" already registered")
+            sio.emit(event='register_player_callback', data=data_to_send, to=sid)
+            return
+
+        try:
+            players.loc[len(players.index)] = [username, password, 0, False, players.id.max() + 1, None, 0]
+            ack_msg = f'Successfully registered {username}'
+            print(f'[SERVER] ', ack_msg)
+        except Exception as e:
+            logging.info(msg=f'Exception>> register_player_handler>> {e}')
+            sio.emit(event='error_callback', data='Failed to register player', to=sid)
+        else:
+            logging.info(msg=ack_msg)
+            data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['reg_succ'], ack_msg)
+            sio.emit(event='register_player_callback', data=data_to_send, to=sid)
 
 
 ###################

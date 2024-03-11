@@ -66,7 +66,7 @@ def login_callback(data) -> None:
     global is_connected
     cmd, msg = chatlib.parse_message(data)
     if cmd == 'ERROR':
-        print('Login failed: ', msg)
+        print('Login failed:', msg)
     else:
         is_connected = True
     locker.set()
@@ -75,7 +75,8 @@ def login_callback(data) -> None:
 @sio.on('play_question_callback')
 def play_question_callback(data) -> None:
     cmd, question_data = chatlib.parse_message(data)
-    q_data = chatlib.split_data(question_data, 5)
+    print(question_data)  # TODO: check expected fields
+    q_data = chatlib.split_data(question_data, 6)
 
     question_pretty_print = [f'\n{x-1} - {q_data[x]}' for x in range(1, len(q_data))]
     print(''.join(question_pretty_print)[5:])

@@ -19,7 +19,8 @@ PROTOCOL_CLIENT = {
 	"score": "MY_SCORE",
 	"high": "HIGHSCORE",
 	"add": "ADD_QUESTION",
-	"logged_in": "LOGGED_IN_USERS"
+	"logged_in": "LOGGED_IN_USERS",
+	"register": "REGISTER_PLAYER"
 }
 
 PROTOCOL_SERVER = {
@@ -34,32 +35,35 @@ PROTOCOL_SERVER = {
 	"error": "ERROR",
 	"no_ques": "NO_QUESTION",
 	"add_succ": "ADD_QUESTION_SUCCESSFULLY",
-	"reg_succ": "REGISTER_SUCCESSFULLY"
+	"reg_succ": "REGISTER_SUCCESSFULLY",
+	"reg_fail": "REGISTER_FAILED"
 }
 
-PROTOCOL_USER_MODE = {'1': False, 2: True}  # 1 is user (NOT manager) - False, 2 is manager - True
+PROTOCOL_USER_MODE = {'1': False, '2': True}  # 1 is user (NOT manager) - False, 2 is manager - True
 
 
-def build_message(cmd, data):
+def in_protocol(cmd: str) -> bool:
+	return cmd in PROTOCOL_CLIENT or cmd in PROTOCOL_SERVER
+
+
+def build_message(cmd: str, data: str) -> str | None:
 	"""
-	Gets command name (str) and data field (str) and creates a valid protocol message
+	Gets command name and data field and creates a valid protocol message
 	Returns: str, or None if error occurred
 	"""
-	if (cmd not in PROTOCOL_CLIENT.values() and cmd not in PROTOCOL_SERVER.values()) or (len(data) > MAX_DATA_LENGTH):
+	if in_protocol(cmd):
 		return None
-	full_msg = cmd
-	while len(full_msg) < 16:  # padding part one of the message
-		full_msg += ' '
-	n = str(len(data))
-	while len(n) < 4:  # padding part two of the message
-		n = '0' + n
+	if len(data) > MAX_DATA_LENGTH:
+		return None
+	full_msg = cmd.ljust(CMD_FIELD_LENGTH, ' ')
+	n = str(len(data)).rjust(LENGTH_FIELD_LENGTH, '0')
 	return full_msg + '|' + n + '|' + data
 
 
-def parse_message(data):
+def parse_message(data: str) -> tuple[str, str] | tuple[None, None]:
 	"""
 	Parses protocol message and returns command name and data field
-	Returns: cmd (str), data (str). If some error occured, returns None, None
+	Returns: cmd (str), data (str). If some error occurred, returns None, None
 	"""
 	try:
 		lst = data.split('|')
@@ -70,7 +74,7 @@ def parse_message(data):
 	cmd = lst[0].strip()
 	num = lst[1]
 	msg = lst[2]
-	if (cmd not in PROTOCOL_CLIENT.values() and cmd not in PROTOCOL_SERVER.values()) or not is_number(num) or len(msg) != int(num):
+	if in_protocol(cmd) or not is_number(num) or len(msg) != int(num):
 		return None, None
 	return cmd, msg
 
@@ -89,7 +93,7 @@ def is_number(num):
 	return True
 
 
-def split_data(msg, expected_fields):
+def split_data(msg: str, expected_fields: int) -> list[str] | None:
 	"""
 	Helper method. gets a string and number of expected fields in it. Splits the string
 	using protocol's data field delimiter (|#) and validates that there are correct number of fields.
@@ -97,37 +101,18 @@ def split_data(msg, expected_fields):
 	"""
 	if '|' in msg:
 		list_of_fields = msg.split('|')
-		if len(list_of_fields) == expected_fields + 1:
+		if len(list_of_fields) == expected_fields:
 			return list_of_fields
 	elif '#' in msg:
 		list_of_fields = msg.split('#')
-		if len(list_of_fields) == expected_fields + 1:
+		if len(list_of_fields) == expected_fields:
 			return list_of_fields
 	return None
 
 
-def join_data(msg_fields):
-	"""
-	Helper method. Gets a list, joins all of its fields to one string divided by the data delimiter.
-	Returns: string that looks like cell1#cell2#cell3
-	"""
-	msg = ""
-	for x in msg_fields:
-		msg += str(x) + '#'
-	return msg[:-1]
-
-
-def parse_notation(sentence):
+def parse_notation(sentence: str) -> str:
 	sentence = sentence.replace('&#039;', "\'")
 	sentence = sentence.replace('&#034;', '\"')
 	sentence = sentence.replace('&quot;', '\"')
 	return sentence
-
-
-def convert_user_mode(mode):
-	if mode == '2':
-		return True
-	elif mode == '1':
-		return False
-	return None
 

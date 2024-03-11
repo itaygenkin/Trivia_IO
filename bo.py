@@ -164,9 +164,8 @@ def get_logged_in_handler() -> None:
 def register_player_handler() -> None:
     username = input('Enter username: ')
     password = input('Enter password: ')
-    new_player_data = chatlib.build_message(chatlib.PROTOCOL_CLIENT['register'], '#'.join([username, password]))
+    new_player_data = chatlib.build_message(chatlib.PROTOCOL_CLIENT['register'], '|'.join([username, password]))
     sio.emit(event='register_player', data=new_player_data)
-
 
 
 def manager_menu(cmd=None) -> bool | None:
@@ -179,7 +178,7 @@ def manager_menu(cmd=None) -> bool | None:
 2 - Get logged in users
 3 - Register new player
 4 - Log out\n"""
-    command = get_input_and_validate(['1', '2', '3'], creator_menu_msg)
+    command = get_input_and_validate(['1', '2', '3', '4'], creator_menu_msg)
     match command:
         case '1':
             add_question_handler()
