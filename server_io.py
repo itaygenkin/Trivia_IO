@@ -1,15 +1,14 @@
-import json
-
 import socketio
 import eventlet
 import requests
-import chatlib
 import random
 import pandas as pd
 import logging
 import atexit
 import sys
+import json
 
+import chatlib
 import helpers
 
 ###############
@@ -143,7 +142,7 @@ def send_error(sid, error_msg: str) -> None:
     :type error_msg: str
     """
     data = {'result': 'ERROR', 'msg': error_msg}
-    sio.emit(event='error', data=json.dumps(data), to=sid)
+    sio.emit(event='error_callback', data=json.dumps(data), to=sid)
     print('[SERVER]: ', error_msg)
 
 
@@ -257,20 +256,27 @@ def answer_handler(sid, data):
     qid, ans = data['question_id'], data['answer']
 
     user_index = players.loc[players['sid'] == sid].index[0]
+    data_to_send = {'result': 'FAILED', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['ans'],
+                    'msg': ''}
+
     # check if the user is correct
     if questions_bank.iloc[int(qid)]['correct_answer'] == ans:
-        data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['correct'], 'YOU GOT 5 POINTS.')
         players.at[user_index, 'score'] += 5
         players.at[user_index, 'wins_in_row'] += 1
+
+        data_to_send['msg'] = 'Correct answer.\nYOU GOT 5 POINTS.'
+        data_to_send['result'] = 'ACK'
     else:
         players.at[user_index, 'wins_in_row'] = 0
-        data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['wrong'], '')
+        data_to_send['result'] = 'ACK'
+        data_to_send['msg'] = 'WRONG ANSWER.'
     players.at[user_index, 'games_played'] += 1
-    sio.emit(event='answer_callback', data=data_to_send, to=sid)
+    sio.emit(event='answer_callback', data=json.dumps(data_to_send), to=sid)
 
 
 @sio.on('server_score')
 def get_score_handler(sid):
+    # TODO: change the sending data to json format
     score = players.loc[players['sid'] == sid]['score'].values[0]
     data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['score'], str(score))
     sio.emit(event='score_callback', data=data_to_send, to=sid)
@@ -279,6 +285,7 @@ def get_score_handler(sid):
 
 @sio.on('server_highscore')
 def get_highscore_handler(sid):
+    # TODO: change the sending data to json format
     highscore = players.sort_values(by=['score'], ascending=False)[['username', 'score']].head(10)
     data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['high'], highscore.to_string(index=False))
     sio.emit(event='highscore_callback', data=data_to_send, to=sid)
