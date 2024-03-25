@@ -1,10 +1,13 @@
+import json
 import signal
 import sys
 import threading
 import time
+from functools import reduce
+
 import socketio
 import chatlib
-
+import helpers
 
 ###############
 ### GLOBALS ###
@@ -15,6 +18,8 @@ sio.connect('http://127.0.0.1:8080')
 locker = threading.Event()
 is_connected = False
 TIMEOUT = 18
+PROTOCOL_TYPE = 'client'
+USER_TYPE = '1'
 
 
 def signal_handler(sig, frame):
@@ -62,40 +67,37 @@ def get_input_and_validate(input_choices: list[str], menu_msg: str) -> str:
 ###########################
 
 @sio.on('login_callback')
-def login_callback(data) -> None:
+def login_callback(data: str) -> None:
     global is_connected
-    cmd, msg = chatlib.parse_message(data)
-    if cmd == 'ERROR':
-        print('Login failed:', msg)
-    else:
+    data = json.loads(data)
+    if data['result'] == 'ACK':
         is_connected = True
+    else:
+        print(data['msg'], 'Please try again.')
     locker.set()
 
 
 @sio.on('play_question_callback')
-def play_question_callback(data) -> None:
-    cmd, question_data = chatlib.parse_message(data)
-    print(question_data)  # TODO: check expected fields
-    q_data = chatlib.split_data(question_data, 6)
+def play_question_callback(data: str) -> None:
+    question_data = json.loads(data)
+    answer_pretty_print = reduce(lambda x, y: f'{x}\n{y[0]+ 1} - {y[1]}', enumerate(question_data['answers']), "")
+    print(question_data['question'] + answer_pretty_print)
 
-    question_pretty_print = [f'\n{x-1} - {q_data[x]}' for x in range(1, len(q_data))]
-    print(''.join(question_pretty_print)[5:])
     user_ans = int(get_input_and_validate(['1', '2', '3', '4'], 'Your answer: '))
-
-    send_answer_handler(q_data[0], q_data[user_ans+1])
-    locker.set()
+    send_answer_handler(question_data['qid'], question_data['answers'][user_ans-1])
+    # locker.set()
 
 
 @sio.on('answer_callback')
-def get_answer_callback(data) -> None:
+def get_answer_callback(data: str) -> None:
     cmd, data = chatlib.parse_message(data)
     print(cmd, data)
-    time.sleep(2.5)
+    time.sleep(2)
     locker.set()
 
 
 @sio.on('score_callback')
-def get_score_callback(data) -> None:
+def get_score_callback(data: str) -> None:
     cmd, score = chatlib.parse_message(data)
     print('Your score:', score)
     time.sleep(3)
@@ -103,7 +105,7 @@ def get_score_callback(data) -> None:
 
 
 @sio.on('highscore_callback')
-def get_highscore_callback(data) -> None:
+def get_highscore_callback(data: str) -> None:
     cmd, highscore = chatlib.parse_message(data)
     print(highscore)
     time.sleep(3)
@@ -139,21 +141,21 @@ def login_handler() -> None:
     """
     username = input('Please enter username: ')
     password = input('Please enter password: ')
-    user_mode = '1'
-    data = [username, password, user_mode]
+    fields = {'username': username, 'password': password, 'user_type': USER_TYPE}
+    data = helpers.build_json_msg('login', PROTOCOL_TYPE, fields)
     print('Logging in...')
-    sio.emit(event='login', data='#'.join(data))
+    sio.emit(event='login', data=data)
 
 
 def logout_handler() -> None:
     try:
-        sio.emit('logout_handler', data='')
+        sio.emit('logout_handler')
     finally:
         disconnect()
         exit()
 
 
-def error_and_exit(error_msg) -> None:
+def error_and_exit(error_msg: str) -> None:
     print(error_msg)
     try:
         disconnect()
@@ -165,9 +167,16 @@ def play_question_handler() -> None:
     sio.emit(event='play_question')
 
 
-def send_answer_handler(qid, ans) -> None:
-    data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['send_ans'], qid + '#' + ans)
-    sio.emit(event='answer', data=data_to_send)
+def send_answer_handler(qid: str, ans: str) -> None:
+    """
+    called after a question is shown to a user,
+    sending back question id number and the user's answer
+    :param qid: a question id number represented as a string
+    :param ans: the user's answer
+    """
+    fields = {'question_id': qid, 'answer': ans}
+    data = helpers.build_json_msg('ans', PROTOCOL_TYPE, fields)
+    sio.emit(event='answer', data=data)
 
 
 def get_score_handler() -> None:

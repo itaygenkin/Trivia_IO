@@ -1,3 +1,5 @@
+import json
+
 import socketio
 import eventlet
 import requests
@@ -8,12 +10,15 @@ import logging
 import atexit
 import sys
 
+import helpers
+
 ###############
 ### GLOBALS ###
 ###############
 
-host = '127.0.0.1'
-port = 8080
+HOST = '127.0.0.1'
+PORT = 8080
+
 questions_bank = pd.DataFrame({'question': ['Which Basketball team has completed two threepeats?'],
                                'answers': [['Chicago Bulls', 'LA Lakers', 'Golden state Warriors', 'Boston Celtics']],
                                'correct_answer': ['Chicago Bulls'],
@@ -25,7 +30,8 @@ players = pd.DataFrame({'username': [],
                         'is_manager': [],
                         'id': [],
                         'sid': [],
-                        'games_played': []})
+                        'games_played': [],
+                        'wins_in_row': []})
 
 
 ###########################
@@ -53,17 +59,6 @@ logging.basicConfig(filename='trivia_logger.log', level=logging.INFO, filemode='
 ####################
 
 
-def gather_answers(correct_answer, incorrect_answers):
-    answers = []
-    correct_question_index = random.randint(1, 4)
-    for i in range(1, 5):
-        if i == correct_question_index:
-            answers.append(correct_answer)
-        else:
-            answers.append(incorrect_answers.pop(0))
-    return answers
-
-
 def update_questions_bank_from_web():  
     global questions_bank
     response = requests.get(url="https://opentdb.com/api.php?amount=50&type=multiple")
@@ -77,7 +72,7 @@ def update_questions_bank_from_web():
     correct_answers = []
 
     for q in payload:
-        question = chatlib.parse_notation(q['question'])
+        question = helpers.parse_notation(q['question'])
         if question in questions_bank['question'].values:
             continue
         questions.append(question)
@@ -86,7 +81,7 @@ def update_questions_bank_from_web():
         incorrect_answers = q['incorrect_answers']
 
         # create a list of all answers and add the list to {answers} list
-        answers.append(gather_answers(correct_answer, incorrect_answers))
+        answers.append(helpers.gather_answers(correct_answer, incorrect_answers))
         correct_answers.append(correct_answer)
 
     max_id = questions_bank.id.max()
@@ -140,14 +135,15 @@ def disconnect(sid):
     logging.info(msg=f'{sid} disconnected')
 
 
-def send_error(sid, error_msg):
+def send_error(sid, error_msg: str) -> None:
     """
     sends an error with a message
     :param sid: the session id of the client to be sent to
     :param error_msg: an error message to be sent
     :type error_msg: str
     """
-    sio.emit(event='error', data=error_msg, to=sid)
+    data = {'result': 'ERROR', 'msg': error_msg}
+    sio.emit(event='error', data=json.dumps(data), to=sid)
     print('[SERVER]: ', error_msg)
 
 
@@ -155,47 +151,82 @@ def send_error(sid, error_msg):
 ### Handlers ###
 ################
 
+def check_correct_username_n_password(username: str, password: str) -> bool:
+    """
+    checks if the username and password are correct
+    """
+    if username not in players['username'].values:
+        return False
+    elif players.loc[players['username'] == username]['password'].values[0] != password:
+        return False
+    else:
+        return True
+
+
+def check_user_logged_in(user: str, password: str) -> bool:
+    """
+    check if the user has already logged in
+    :return: True if the user has already logged in, o/w False
+    """
+    return players.loc[(players['username'] == user) & (players['password'] == password)]['sid'].values[0]
+
+
+def check_user_permission(user: str, password: str, user_type: bool) -> bool:
+    """
+    check if the user tried to access the back office without having permission
+    :return: True if the user tried to access the back office without permission
+    """
+    return user_type != players.loc[(players['username'] == user) &
+                                    (players['password'] == password)]['is_manager'].values[0]
+
+
 @sio.on('login')
 def login_handler(sid, data):
-    msg_back = ""
+    data = json.loads(data)
+    if data['command'] != helpers.PROTOCOL_CLIENT['login']:
+        send_error(sid, 'Wrong direction')
+
+    data_to_send = {'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['login']}
     try:
-        [user, password, mode] = chatlib.split_data(data, 3)
-        user_mode = chatlib.PROTOCOL_USER_MODE[mode]
+        user, password = data['username'], data['password']
+        user_type = helpers.PROTOCOL_USER_TYPE[data['user_type']]
 
         # check username and password correctness
-        if user not in players['username'].values or \
-                players.loc[players['username'] == user]['password'].values[0] != password:
-            err_msg = "Incorrect username or password"
-            msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
+        if not check_correct_username_n_password(user, password):
+            data_to_send['msg'] = "Incorrect username or password"
+            data_to_send['result'] = 'FAILED'
 
         # check if user has already logged in
-        elif players.loc[(players['username'] == user) & (players['password'] == password)]['sid'].values[0]:
-            err_msg = f'{user} has already logged in'
-            msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
+        elif check_user_logged_in(user, password):
+            data_to_send['msg'] = f'{user} has already logged in.'
+            data_to_send['result'] = 'FAILED'
 
         # check if user tried to log in without the right permission
-        elif user_mode != players.loc[(players['username'] == user) &
-                                      (players['password'] == password)]['is_manager'].values[0]:
-            err_msg = f"{user} does not have manager permission"
-            msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_failed_msg'], err_msg)
+        elif check_user_permission(user, password, user_type):
+            data_to_send['msg'] = "Access Denied."
+            data_to_send['result'] = 'FAILED'
 
         # the user has successfully logged in
         else:
             index = players.loc[(players['username'] == user) & (players['password'] == password)].index[0]
-            players.at[index, 'sid'] = sid
-            msg_back = chatlib.build_message(chatlib.PROTOCOL_SERVER['login_ok_msg'], 'Successfully logged in')
+            players.at[index, 'sid'] = sid  # update the session id of the user
+            data_to_send['msg'] = 'Successfully logged in'
+            data_to_send['result'] = 'ACK'
             logging.info(msg=f'{user} successfully logged in')
 
     except AttributeError as e:
         msg_back = 'Failed to log in. Try again.'
-        send_error(sid, "Incorrect username or password")
+        send_error(sid, msg_back)
+        print('[SERVER] ', msg_back)
     except Exception as ex:
         msg_back = 'Failed to log in. Try again.'
         logging.info(msg=f'Exception>> login_handler>> {ex}')
         logging.info(msg=f'Something wrong happened when a user tried to log in.\nsid: {sid}')
-    finally:
-        sio.emit(event='login_callback', to=sid, data=msg_back)
+        send_error(sid, msg_back)
         print('[SERVER] ', msg_back)
+    else:
+        sio.emit(event='login_callback', to=sid, data=json.dumps(data_to_send))
+        print('[SERVER] ', data_to_send['msg'])
 
 
 @sio.on('logout')
@@ -203,31 +234,36 @@ def logout_handler(sid):
     sio.disconnect(sid)
 
 
-def create_random_question():
+def create_random_question() -> json:
     qid = random.choice([x for x in range(1, questions_bank['id'].max())])
-    question = questions_bank.iloc[qid]
-    return str(qid) + '#' + question['question'] + '#' + '#'.join(question['answers'])
+    rand_question = questions_bank.iloc[qid]
+    return {'qid': qid, 'question': rand_question['question'], 'answers': rand_question['answers']}
 
 
 @sio.on('play_question')
 def play_question_handler(sid):
     question_data = create_random_question()
-    data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['question'], question_data)
-    sio.emit(event='play_question_callback', data=data_to_send, to=sid)
-    print('[SERVER] ', data_to_send)
+    question_data['command'] = helpers.PROTOCOL_SERVER['question']
+    sio.emit(event='play_question_callback', data=json.dumps(question_data), to=sid)
+    print('[SERVER] ', question_data)
 
 
 @sio.on('answer')
 def answer_handler(sid, data):
-    cmd, msg = chatlib.parse_message(data)
-    qid, ans = chatlib.split_data(msg, 2)
+    data = json.loads(data)
+    # check for the right direction
+    if data['command'] != helpers.PROTOCOL_CLIENT['ans']:
+        send_error(sid, 'Wrong direction')
+    qid, ans = data['question_id'], data['answer']
 
     user_index = players.loc[players['sid'] == sid].index[0]
     # check if the user is correct
     if questions_bank.iloc[int(qid)]['correct_answer'] == ans:
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['correct'], 'YOU GOT 5 POINTS.')
         players.at[user_index, 'score'] += 5
+        players.at[user_index, 'wins_in_row'] += 1
     else:
+        players.at[user_index, 'wins_in_row'] = 0
         data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['wrong'], '')
     players.at[user_index, 'games_played'] += 1
     sio.emit(event='answer_callback', data=data_to_send, to=sid)
@@ -314,4 +350,4 @@ def register_player_handler(sid, data: str) -> None:
 if __name__ == '__main__':
     update_questions_bank_from_web()
     read_and_append_csv()
-    eventlet.wsgi.server(eventlet.listen((host, port)), app)
+    eventlet.wsgi.server(eventlet.listen((HOST, PORT)), app)
