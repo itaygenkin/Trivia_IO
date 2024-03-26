@@ -13,13 +13,13 @@ import helpers
 ### GLOBALS ###
 ###############
 
-sio = socketio.Client()
-sio.connect('http://127.0.0.1:8080')
-locker = threading.Event()
 is_connected = False
 TIMEOUT = 18
 PROTOCOL_TYPE = 'client'
 USER_TYPE = '1'
+sio = socketio.Client()
+sio.connect('http://127.0.0.1:8080')
+locker = threading.Event()
 
 
 def signal_handler(sig, frame):
@@ -90,33 +90,33 @@ def play_question_callback(data: str) -> None:
 
 @sio.on('answer_callback')
 def get_answer_callback(data: str) -> None:
-    cmd, data = chatlib.parse_message(data)
-    print(cmd, data)
+    data = json.loads(data)
+    print(data['msg'])
     time.sleep(2)
     locker.set()
 
 
 @sio.on('score_callback')
 def get_score_callback(data: str) -> None:
-    cmd, score = chatlib.parse_message(data)
-    print('Your score:', score)
+    data = json.loads(data)
+    print('Your score: ', data['msg'])
     time.sleep(3)
     locker.set()
 
 
 @sio.on('highscore_callback')
 def get_highscore_callback(data: str) -> None:
-    cmd, highscore = chatlib.parse_message(data)
-    print(highscore)
+    data = json.loads(data)
+    print(data['msg'])
     time.sleep(3)
     locker.set()
 
 
 @sio.on('error_callback')
 def error_callback(data: str) -> None:
-    cmd, msg = chatlib.parse_message(data)
-    print(cmd)
-    print(msg)
+    data = json.loads(data)
+    print(data['result'])
+    print(data['msg'])
     locker.set()
 
 

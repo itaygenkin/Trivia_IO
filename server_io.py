@@ -152,7 +152,8 @@ def send_error(sid, error_msg: str) -> None:
 
 def check_correct_username_n_password(username: str, password: str) -> bool:
     """
-    checks if the username and password are correct
+    checks if the username and password are correct,
+    login_handler helper function
     """
     if username not in players['username'].values:
         return False
@@ -164,7 +165,8 @@ def check_correct_username_n_password(username: str, password: str) -> bool:
 
 def check_user_logged_in(user: str, password: str) -> bool:
     """
-    check if the user has already logged in
+    check if the user has already logged in,
+    login_handler helper function
     :return: True if the user has already logged in, o/w False
     """
     return players.loc[(players['username'] == user) & (players['password'] == password)]['sid'].values[0]
@@ -172,7 +174,8 @@ def check_user_logged_in(user: str, password: str) -> bool:
 
 def check_user_permission(user: str, password: str, user_type: bool) -> bool:
     """
-    check if the user tried to access the back office without having permission
+    check if the user tried to access the back office without having permission,
+    login_handler helper function
     :return: True if the user tried to access the back office without permission
     """
     return user_type != players.loc[(players['username'] == user) &
@@ -256,8 +259,7 @@ def answer_handler(sid, data):
     qid, ans = data['question_id'], data['answer']
 
     user_index = players.loc[players['sid'] == sid].index[0]
-    data_to_send = {'result': 'FAILED', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['ans'],
-                    'msg': ''}
+    data_to_send = {'result': 'FAILED', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['ans'], 'msg': ''}
 
     # check if the user is correct
     if questions_bank.iloc[int(qid)]['correct_answer'] == ans:
@@ -276,19 +278,19 @@ def answer_handler(sid, data):
 
 @sio.on('server_score')
 def get_score_handler(sid):
-    # TODO: change the sending data to json format
     score = players.loc[players['sid'] == sid]['score'].values[0]
-    data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['score'], str(score))
-    sio.emit(event='score_callback', data=data_to_send, to=sid)
+    data_to_send = {'result': 'ACK', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['score'],
+                    'msg': str(score)}
+    sio.emit(event='score_callback', data=json.dumps(data_to_send), to=sid)
     print('[SERVER] ', data_to_send)
 
 
 @sio.on('server_highscore')
 def get_highscore_handler(sid):
-    # TODO: change the sending data to json format
     highscore = players.sort_values(by=['score'], ascending=False)[['username', 'score']].head(10)
-    data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['high'], highscore.to_string(index=False))
-    sio.emit(event='highscore_callback', data=data_to_send, to=sid)
+    data_to_send = {'result': 'ACK', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['highscore'],
+                    'msg': highscore.to_string(index=False)}
+    sio.emit(event='highscore_callback', data=json.dumps(data_to_send), to=sid)
     print('[SERVER] ', data_to_send)
 
 
@@ -329,7 +331,7 @@ def register_player_handler(sid, data: str) -> None:
         sio.emit(event='error_callback', data='can\'t parse data', to=sid)
     else:
         # username must be unique
-        # check for username has already registered
+        # check if username has already registered
         if username in players['username'].values:
             logging.info(msg=f'tried to register an existing player, username: {username}')
             data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['reg_fail'], f"username \'{username}\' has"
