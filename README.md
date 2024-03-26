@@ -8,3 +8,4 @@ The game fetches questions via API requests, providing players with dynamic and 
 - Socket.IO Server: Utilizes Socket.IO to handle client and server communication.
 - API requests: Questions are fetched from an API to provide a dynamic and varied set of questions.
 - Client Stats: Each client's statistics are saved in a data frame for tracking and analysis.
+- Logging: Logs actions to help track events and errors for debugging purposes.
