@@ -31,6 +31,7 @@ players = pd.DataFrame({'username': [],
                         'sid': [],
                         'games_played': [],
                         'wins_in_row': []})
+players['is_manager'] = players['is_manager'].astype(bool)
 
 
 ###########################
@@ -38,7 +39,7 @@ players = pd.DataFrame({'username': [],
 ###########################
 
 @atexit.register
-def cleanup():
+def cleanup() -> None:
     print('-^--^-\n--ww--')
     logging.info(msg='an error occurred, server cleans up and shuts down')
     for sid in players['sid'].values:
@@ -58,7 +59,7 @@ logging.basicConfig(filename='trivia_logger.log', level=logging.INFO, filemode='
 ####################
 
 
-def update_questions_bank_from_web():  
+def update_questions_bank_from_web() -> None:
     global questions_bank
     response = requests.get(url="https://opentdb.com/api.php?amount=50&type=multiple")
     if not response.ok:
@@ -91,11 +92,11 @@ def update_questions_bank_from_web():
     logging.info(msg='successfully updated questions from web')
 
 
-def write_to_csv():
+def write_to_csv() -> None:
     players.to_csv(sys.argv[1], index=False, mode='w')
 
 
-def read_and_append_csv():
+def read_and_append_csv() -> None:
     """
     reading a csv file and append the data to players data frame
     """
@@ -119,13 +120,13 @@ app = socketio.WSGIApp(sio, static_files={'/': './content/'})
 
 
 @sio.event
-def connect(sid, environ):
+def connect(sid, environ) -> None:
     print(sid, 'connected...')
     logging.info(msg=f'{sid} connected')
 
 
 @sio.event
-def disconnect(sid):
+def disconnect(sid) -> None:
     sio.disconnect(sid=sid)
     sid_index = players.loc[players['sid'] == sid]['sid'].index
     if len(sid_index) > 0 and sid in players.iloc[sid_index[0]].values:
@@ -143,7 +144,7 @@ def send_error(sid, error_msg: str) -> None:
     """
     data = {'result': 'ERROR', 'msg': error_msg}
     sio.emit(event='error_callback', data=json.dumps(data), to=sid)
-    print('[SERVER]: ', error_msg)
+    print('[SERVER] ', error_msg)
 
 
 ################
@@ -183,10 +184,11 @@ def check_user_permission(user: str, password: str, user_type: bool) -> bool:
 
 
 @sio.on('login')
-def login_handler(sid, data):
+def login_handler(sid, data: str) -> None:
     data = json.loads(data)
     if data['command'] != helpers.PROTOCOL_CLIENT['login']:
         send_error(sid, 'Wrong direction')
+        return
 
     data_to_send = {'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['login']}
     try:
@@ -196,17 +198,17 @@ def login_handler(sid, data):
         # check username and password correctness
         if not check_correct_username_n_password(user, password):
             data_to_send['msg'] = "Incorrect username or password"
-            data_to_send['result'] = 'FAILED'
+            data_to_send['result'] = 'FAILURE'
 
         # check if user has already logged in
         elif check_user_logged_in(user, password):
             data_to_send['msg'] = f'{user} has already logged in.'
-            data_to_send['result'] = 'FAILED'
+            data_to_send['result'] = 'FAILURE'
 
         # check if user tried to log in without the right permission
         elif check_user_permission(user, password, user_type):
             data_to_send['msg'] = "Access Denied."
-            data_to_send['result'] = 'FAILED'
+            data_to_send['result'] = 'FAILURE'
 
         # the user has successfully logged in
         else:
@@ -236,14 +238,14 @@ def logout_handler(sid):
     sio.disconnect(sid)
 
 
-def create_random_question() -> json:
+def create_random_question() -> dict:
     qid = random.choice([x for x in range(1, questions_bank['id'].max())])
     rand_question = questions_bank.iloc[qid]
     return {'qid': qid, 'question': rand_question['question'], 'answers': rand_question['answers']}
 
 
 @sio.on('play_question')
-def play_question_handler(sid):
+def play_question_handler(sid) -> None:
     question_data = create_random_question()
     question_data['command'] = helpers.PROTOCOL_SERVER['question']
     sio.emit(event='play_question_callback', data=json.dumps(question_data), to=sid)
@@ -251,7 +253,7 @@ def play_question_handler(sid):
 
 
 @sio.on('answer')
-def answer_handler(sid, data):
+def answer_handler(sid, data: str) -> None:
     data = json.loads(data)
     # check for the right direction
     if data['command'] != helpers.PROTOCOL_CLIENT['ans']:
@@ -277,7 +279,7 @@ def answer_handler(sid, data):
 
 
 @sio.on('server_score')
-def get_score_handler(sid):
+def get_score_handler(sid) -> None:
     score = players.loc[players['sid'] == sid]['score'].values[0]
     data_to_send = {'result': 'ACK', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['score'],
                     'msg': str(score)}
@@ -286,7 +288,7 @@ def get_score_handler(sid):
 
 
 @sio.on('server_highscore')
-def get_highscore_handler(sid):
+def get_highscore_handler(sid) -> None:
     highscore = players.sort_values(by=['score'], ascending=False)[['username', 'score']].head(10)
     data_to_send = {'result': 'ACK', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['highscore'],
                     'msg': highscore.to_string(index=False)}
@@ -295,61 +297,63 @@ def get_highscore_handler(sid):
 
 
 @sio.on('server_add_question')
-def add_question_handler(sid, data):
+def add_question_handler(sid, data: str) -> None:
     try:
-        q_data = chatlib.parse_message(data)
+        q_data = json.loads(data)
         max_id = questions_bank.id.max()
-        question_to_add = pd.DataFrame({'question': q_data[0], 'answers': [q_data[1], q_data[2], q_data[3], q_data[4]],
-                                        'correct_answer': q_data[5], 'id': max_id})
+        question_to_add = pd.DataFrame({'question': q_data['question'], 'answers': q_data['answers'],
+                                        'correct_answer': q_data['correct_answer'], 'id': max_id})
         questions_bank._append(question_to_add)
-        data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['add_succ'], "")
+        data_to_send = {'result': 'ACK', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['add_succ']}
     except Exception as e:
-        data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['error'], 'Failed to add the question.')
         logging.info(msg='Failed to add question')
         logging.info(msg=f'Exception>> add_question_handler>> {e}')
-        sio.emit(event='error_callback', data=data_to_send, to=sid)
+        send_error(sid, 'Failed to add the question.')
     else:
         logging.info(msg='successfully added question')
-        sio.emit(event='add_question_callback', data=data_to_send, to=sid)
+        sio.emit(event='add_question_callback', data=json.dumps(data_to_send), to=sid)
 
 
 @sio.on('logged_in_users')
 def get_logged_in_users_handler(sid):
     logged_in_users = players.loc[players['sid'].notnull()][['username', 'id']]
-    data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['logged_in'], logged_in_users.to_string())
-    sio.emit(event='get_logged_in_callback', data=data_to_send, to=sid)
+    data_to_send = {'result': 'ACK', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['logged_in'],
+                    'msg': logged_in_users.to_string()}
+    sio.emit(event='get_logged_in_callback', data=json.dumps(data_to_send), to=sid)
     print('[SERVER] ', data_to_send)
 
 
 @sio.on('register_player')
 def register_player_handler(sid, data: str) -> None:
     try:
-        username, password = chatlib.split_data(data, 4)[2:]
+        data = json.loads(data)
+        username, password = data['username'], data['password']
     except TypeError as te:
         logging.info(msg=f'Error>> register_player_handler>> {te}')
         logging.info(msg='can\'t parse data')
-        sio.emit(event='error_callback', data='can\'t parse data', to=sid)
+        send_error(sid, 'can\'t parse data')
     else:
         # username must be unique
         # check if username has already registered
         if username in players['username'].values:
             logging.info(msg=f'tried to register an existing player, username: {username}')
-            data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['reg_fail'], f"username \'{username}\' has"
-                                                                                      f" already registered")
-            sio.emit(event='register_player_callback', data=data_to_send, to=sid)
+            data_to_send = {'result': 'Failure', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['reg_fail'],
+                            'msg': f"Username \'{username}\' has already registered"}
+            sio.emit(event='register_player_callback', data=json.dumps(data_to_send), to=sid)
             return
 
         try:
-            players.loc[len(players.index)] = [username, password, 0, False, players.id.max() + 1, None, 0]
+            players.loc[len(players.index)] = [username, password, 0, False, players.id.max() + 1, None, 0, 0]
             ack_msg = f'Successfully registered {username}'
             print(f'[SERVER] ', ack_msg)
         except Exception as e:
             logging.info(msg=f'Exception>> register_player_handler>> {e}')
-            sio.emit(event='error_callback', data='Failed to register player', to=sid)
+            send_error(sid, 'Failed to register player')
         else:
             logging.info(msg=ack_msg)
-            data_to_send = chatlib.build_message(chatlib.PROTOCOL_SERVER['reg_succ'], ack_msg)
-            sio.emit(event='register_player_callback', data=data_to_send, to=sid)
+            data_to_send = {'result': 'ACK', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['reg_succ'],
+                            'msg': ack_msg}
+            sio.emit(event='register_player_callback', data=json.dumps(data_to_send), to=sid)
 
 
 ###################

@@ -1,3 +1,4 @@
+import json
 import signal
 import threading
 
@@ -6,6 +7,7 @@ import chatlib
 import time
 import sys
 
+import helpers
 
 ###############
 ### GLOBALS ###
@@ -16,6 +18,9 @@ sio.connect('http://127.0.0.1:8080')
 locker = threading.Event()
 is_connected = False
 TIMEOUT = 8
+PROTOCOL_TYPE = 'manager'
+USER_TYPE = '2'
+
 
 def signal_handler(sig, frame):
     """
@@ -63,41 +68,40 @@ def get_input_and_validate(input_choices: list[str], menu_msg: str) -> str:
 @sio.on('login_callback')
 def login_callback(data: str) -> None:
     global is_connected
-    cmd, msg = chatlib.parse_message(data)
-    if cmd == 'ERROR':
-        print('Login failed: ', msg)
-    else:
+    data = json.loads(data)
+    if data['result'] == 'ACK':
         is_connected = True
+    else:
+        print(data['msg'], 'Please try again.')
     locker.set()
 
 
 @sio.on('add_question_callback')
 def add_question_callback(data: str) -> None:
-    cmd, msg = chatlib.parse_message(data)
-    print(cmd)
+    data = json.loads(data)
+    print(data['result'])
     locker.set()
 
 
 @sio.on('get_logged_in_callback')
 def get_logged_in_users_callback(data: str) -> None:
-    cmd, msg = chatlib.parse_message(data)
-    print(cmd)
-    print(msg)
+    data = json.loads(data)
+    print(data['msg'])
     locker.set()
 
 
 @sio.on('register_player_callback')
 def register_player_callback(data: str) -> None:
-    cmd, msg = chatlib.parse_message(data)
-    print(msg)
+    data = json.loads(data)
+    print(data['msg'])
     locker.set()
 
 
 @sio.on('error_callback')
 def error_callback(data: str) -> None:
-    cmd, msg = chatlib.parse_message(data)
-    print(cmd)
-    print(msg)
+    data = json.loads(data)
+    print(data['result'])
+    print(data['msg'])
     locker.set()
 
 
@@ -123,10 +127,10 @@ def login_handler() -> None:
     print("Hey Manager,")
     username = input('Please enter your name: ')
     password = input('Please enter password: ')
-    user_mode = '2'
-    data = [username, password, user_mode]
+    fields = {'username': username, 'password': password, 'user_type': USER_TYPE}
+    data_to_send = helpers.build_json_msg('login', 'manager', fields)
     print('Logging in...')
-    sio.emit(event='login', data='#'.join(data))
+    sio.emit(event='login', data=data_to_send)
 
 
 def logout_handler() -> None:
@@ -149,11 +153,14 @@ def add_question_handler() -> None:
     question = input('Write the question: ')
     if not question.endswith('?'):
         question += '?'
+
     answers = [input(f'Write answer number {i}: ') for i in range(1, 5)]
     correct_answer_msg = 'Write the correct answer number: '
-    correct_answer = int(get_input_and_validate(['1', '2', '3', '4'], correct_answer_msg)) - 1
-    question_data = [question, *answers, answers[int(correct_answer)]]
-    data_to_send = chatlib.build_message(chatlib.PROTOCOL_CLIENT['add'], '#'.join(question_data))
+    correct_answer_num = int(get_input_and_validate(['1', '2', '3', '4'], correct_answer_msg)) - 1
+
+    fields = {'question': question, 'correct_answer': answers[correct_answer_num], 'answers': answers}
+    data_to_send = helpers.build_json_msg('add', PROTOCOL_TYPE, fields)
+
     sio.emit(event='server_add_question', data=data_to_send)
 
 
@@ -164,7 +171,8 @@ def get_logged_in_handler() -> None:
 def register_player_handler() -> None:
     username = input('Enter username: ')
     password = input('Enter password: ')
-    new_player_data = chatlib.build_message(chatlib.PROTOCOL_CLIENT['register'], '|'.join([username, password]))
+    fields = {'username': username, 'password': password}
+    new_player_data = helpers.build_json_msg('register', PROTOCOL_TYPE, fields)
     sio.emit(event='register_player', data=new_player_data)
 
 
