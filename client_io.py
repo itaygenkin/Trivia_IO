@@ -96,10 +96,10 @@ def get_answer_callback(data: str) -> None:
     locker.set()
 
 
-@sio.on('score_callback')
-def get_score_callback(data: str) -> None:
+@sio.on('stats_callback')
+def get_stats_callback(data: str) -> None:
     data = json.loads(data)
-    print('Your score: ', data['msg'])
+    print(data['msg'])
     time.sleep(3)
     locker.set()
 
@@ -179,8 +179,8 @@ def send_answer_handler(qid: str, ans: str) -> None:
     sio.emit(event='answer', data=data)
 
 
-def get_score_handler() -> None:
-    sio.emit(event='server_score')
+def get_stats_handler() -> None:
+    sio.emit(event='server_stats')
 
 
 def get_highscore_handler() -> None:
@@ -202,16 +202,16 @@ def player_menu(cmd=None):
     :param cmd: for optional use case later (not used right now)
     """
     player_menu_msg = """
-1 - Play a question
-2 - Get score
-3 - Get highscore
-4 - Log out\n"""
+1 - Play a Question
+2 - Get Stats
+3 - Get Highscore
+4 - Log Out\n"""
     command = get_input_and_validate(['1', '2', '3', '4'], player_menu_msg)
     match command:
         case '1':
             play_question_handler()
         case '2':
-            get_score_handler()
+            get_stats_handler()
         case '3':
             get_highscore_handler()
         case '4':

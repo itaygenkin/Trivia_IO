@@ -32,6 +32,9 @@ players = pd.DataFrame({'username': [],
                         'games_played': [],
                         'wins_in_row': []})
 players['is_manager'] = players['is_manager'].astype(bool)
+players['score'] = players['score'].astype(int)
+players['games_played'] = players['games_played'].astype(int)
+players['wins_in_row'] = players['wins_in_row'].astype(int)
 
 
 ###########################
@@ -278,12 +281,12 @@ def answer_handler(sid, data: str) -> None:
     sio.emit(event='answer_callback', data=json.dumps(data_to_send), to=sid)
 
 
-@sio.on('server_score')
-def get_score_handler(sid) -> None:
-    score = players.loc[players['sid'] == sid]['score'].values[0]
-    data_to_send = {'result': 'ACK', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['score'],
+@sio.on('server_stats')
+def get_stats_handler(sid) -> None:
+    score = players.loc[players['sid'] == sid][['score', 'games_played', 'wins_in_row']]
+    data_to_send = {'result': 'ACK', 'protocol': 'server', 'command': helpers.PROTOCOL_SERVER['stats'],
                     'msg': str(score)}
-    sio.emit(event='score_callback', data=json.dumps(data_to_send), to=sid)
+    sio.emit(event='stats_callback', data=json.dumps(data_to_send), to=sid)
     print('[SERVER] ', data_to_send)
 
 
